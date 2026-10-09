@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+coverage/
+package-lock.json
+expo-env.d.ts
+.env
+.env.*
+.claude/
+.vscode/
+assets/
+CLAUDE.md
