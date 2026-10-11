@@ -1,45 +1,30 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-// Temporary placeholder colors; Phase 1 replaces them with the design system.
-const placeholderColors = {
-  light: { background: '#FFFFFF', text: '#111111' },
-  dark: { background: '#111111', text: '#F5F5F5' },
-} as const;
+import { spacing } from '@/design/tokens';
+
+import { AppText } from './AppText';
+import { Screen } from './Screen';
 
 type Props = {
   title: string;
   children?: ReactNode;
 };
 
+// Temporary placeholder; Phase 1 replaces every screen that uses it.
 export function PlaceholderScreen({ title, children }: Props) {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const colors = placeholderColors[scheme];
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
-        {title}
-      </Text>
-      {children}
-    </View>
+    <Screen>
+      <View style={styles.center}>
+        <AppText variant="title" accessibilityRole="header">
+          {title}
+        </AppText>
+        {children}
+      </View>
+    </Screen>
   );
 }
 
-export function usePlaceholderTextColor(): string {
-  return placeholderColors[useColorScheme() === 'dark' ? 'dark' : 'light'].text;
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    gap: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
 });
