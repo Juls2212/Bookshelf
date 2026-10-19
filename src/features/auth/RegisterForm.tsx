@@ -9,6 +9,8 @@ import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { spacing } from '@/design/tokens';
 import { format, t } from '@/i18n';
+import { INPUT_LIMITS } from '@/lib/inputLimits';
+import { emailInput, lineInput } from '@/lib/inputSanitizers';
 import { useProfileStore } from '@/stores/profileStore';
 
 import { authErrorMessage, validationMessage, type AuthErrorCode } from './authErrors';
@@ -91,20 +93,23 @@ export function RegisterForm({ onSignIn }: Props) {
         label={t.auth.register.nameLabel}
         placeholder={t.auth.register.namePlaceholder}
         value={values.displayName}
-        onChangeText={setField('displayName')}
+        onChangeText={(text) => setField('displayName')(lineInput(text, INPUT_LIMITS.displayName))}
         autoCapitalize="words"
         autoComplete="name"
         textContentType="name"
-        maxLength={80}
+        maxLength={INPUT_LIMITS.displayName}
         errorText={fieldError('displayName')}
       />
       <TextField
         label={t.auth.register.emailLabel}
         placeholder={t.auth.register.emailPlaceholder}
         value={values.email}
-        onChangeText={setField('email')}
+        onChangeText={(text) => setField('email')(emailInput(text, INPUT_LIMITS.email))}
         keyboardType="email-address"
+        inputMode="email"
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={INPUT_LIMITS.email}
         autoComplete="email"
         textContentType="emailAddress"
         errorText={fieldError('email')}
@@ -116,6 +121,12 @@ export function RegisterForm({ onSignIn }: Props) {
         onChangeText={setField('password')}
         secureTextEntry
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={INPUT_LIMITS.passwordMax}
+        helperText={format(t.auth.register.passwordHint, {
+          min: INPUT_LIMITS.passwordMin,
+          max: INPUT_LIMITS.passwordMax,
+        })}
         autoComplete="new-password"
         textContentType="newPassword"
         errorText={fieldError('password')}
@@ -127,6 +138,8 @@ export function RegisterForm({ onSignIn }: Props) {
         onChangeText={setField('confirmation')}
         secureTextEntry
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={INPUT_LIMITS.passwordMax}
         autoComplete="new-password"
         textContentType="newPassword"
         returnKeyType="go"
