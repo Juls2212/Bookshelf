@@ -24,6 +24,8 @@ export type NewBook = {
   currentPage?: number | null;
   rating?: number | null;
   notes?: string | null;
+  /** Local cover file; setting it queues the upload of the cover. */
+  localCoverUri?: string | null;
 };
 
 /** Partial update. Loans have dedicated methods (`setLoan` / `clearLoan`). */
