@@ -2,11 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 
 import LibraryScreen from '@/app/(tabs)/library';
+import { COVER_ASPECT } from '@/components/BookCover';
 import { ToastProvider } from '@/components/Toast';
 import { ThemeProvider } from '@/design/ThemeProvider';
 import { BookForm } from '@/features/library/BookForm';
 import { emptyBookForm } from '@/features/library/bookFormLogic';
+import type { LocalImage } from '@/features/library/coverService';
 import { format, t } from '@/i18n';
+import { useSyncStore } from '@/stores/syncStore';
 import type { Book } from '@/types/book';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -24,8 +27,21 @@ jest.mock('expo-router', () => ({
   useRouter: () => mockRouterApi,
   useLocalSearchParams: () => mockSearchParams,
 }));
+const mockCovers = {
+  pickFromGallery: jest.fn(),
+  getSignedUrls: jest.fn(),
+  renderPreview: jest.fn(async () => ({
+    ok: true,
+    data: { uri: 'file:///cache/preview.jpg', width: 340, height: 480 },
+  })),
+  measure: jest.fn(async () => ({ ok: true, data: { width: 1200, height: 900 } })),
+  removeLocal: jest.fn(),
+};
+// Getter: the mock object is created after the hoisted jest.mock call.
 jest.mock('@/features/library/coverService', () => ({
-  coverService: { pickFromGallery: jest.fn(), getSignedUrls: jest.fn() },
+  get coverService() {
+    return mockCovers;
+  },
 }));
 jest.mock('@/components/ShelfMotion', () => ({
   ShelfMotion: ({ children }: { children: unknown }) => children,
@@ -48,6 +64,9 @@ jest.mock('@/stores/libraryStore', () => {
   useLibraryStore.getState = () => mockLibrary.state;
   return { useLibraryStore };
 });
+
+/** Accessible name of a required field. */
+const required = (label: string) => format(t.common.requiredA11y, { label });
 
 function renderUi(ui: ReactElement) {
   return render(
@@ -89,6 +108,8 @@ function setLibrary(partial: Partial<MockLibraryState>) {
 }
 
 beforeEach(() => {
+  // The library was downloaded on this device before (first-run states are tested elsewhere).
+  useSyncStore.setState({ initialPullDone: true });
   jest.clearAllMocks();
   delete mockSearchParams.genre;
   delete mockSearchParams.added;
@@ -161,29 +182,55 @@ describe('Biblioteca states', () => {
 });
 
 describe('BookForm', () => {
-  it('shows inline validation and does not submit an empty title', async () => {
+  it('blocks saving without a title, with the reason shown, and never submits', async () => {
     const onSubmit = jest.fn();
     await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
-    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
-    expect(screen.getByText(t.bookValidation.title_required)).toBeOnTheScreen();
-    expect(screen.getByText(t.bookForm.fixErrors)).toBeOnTheScreen();
+    expect(screen.getByTestId('save-blocker')).toHaveTextContent(t.bookValidation.title_required);
+    const save = screen.getByRole('button', { name: t.bookForm.save });
+    expect(save).toBeDisabled();
+    await fireEvent.press(save);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('blocks saving while the page count is missing or outside 1-10000', async () => {
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.titleLabel)), 'Rayuela');
+    const save = () => screen.getByRole('button', { name: t.bookForm.save });
+    expect(save()).toBeDisabled();
+    expect(screen.getByTestId('save-blocker')).toHaveTextContent(
+      t.bookValidation.page_count_required,
+    );
+    for (const pages of ['0', '10001']) {
+      await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), pages);
+      expect(save()).toBeDisabled();
+      expect(screen.getByTestId('save-blocker')).toHaveTextContent(
+        t.bookValidation.page_count_invalid,
+      );
+    }
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), '10000');
+    expect(save()).toBeEnabled();
+    expect(screen.queryByTestId('save-blocker')).toBeNull();
+    await fireEvent.press(save());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
   it('shows the current page only while reading and submits the values', async () => {
     const onSubmit = jest.fn(async () => ({ ok: true as const }));
     await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
-    await fireEvent.changeText(screen.getByLabelText(t.bookForm.titleLabel), 'Los almendros');
-    await fireEvent.changeText(screen.getByLabelText(t.bookForm.pagesLabel), '312 pages');
+    await fireEvent.changeText(
+      screen.getByLabelText(required(t.bookForm.titleLabel)),
+      'Los almendros',
+    );
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), '312 pages');
     expect(screen.queryByLabelText(t.bookForm.currentPageLabel)).toBeNull();
 
     await fireEvent.press(screen.getByRole('radio', { name: t.readingStatus.reading }));
     await fireEvent.changeText(screen.getByLabelText(t.bookForm.currentPageLabel), '214');
     expect(screen.getByText(format(t.bookForm.ofPages, { pages: '312' }))).toBeOnTheScreen();
 
-    await fireEvent.press(
-      screen.getByRole('radio', { name: format(t.rating.starMany, { value: 4 }) }),
-    );
+    // Rating is not asked for while reading.
+    expect(screen.queryByText(t.bookForm.ratingLabel)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
 
     expect(onSubmit).toHaveBeenCalledWith(
@@ -193,16 +240,130 @@ describe('BookForm', () => {
         pages: '312',
         readingStatus: 'reading',
         currentPage: '214',
-        rating: 4,
+        rating: null,
       },
       null,
     );
   });
 
+  it('requires the page count (1 to 10000) and marks the field as required', async () => {
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.titleLabel)), 'Herbario');
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
+    expect(screen.getByText(t.bookValidation.page_count_required)).toBeOnTheScreen();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), '10001');
+    expect(screen.getByText(t.bookValidation.page_count_invalid)).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), '96');
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pages: '96' }), null);
+  });
+
+  it('editing a book saved without a page count asks for it', async () => {
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(
+      <BookForm
+        initialValues={{ ...emptyBookForm, title: 'Antiguo' }}
+        existingCover={{ uri: 'file:///doc/covers/u/b.jpg' }}
+        onSubmit={onSubmit}
+        onCancel={jest.fn()}
+      />,
+    );
+    // A saved cover is never re-cropped.
+    expect(screen.queryByRole('button', { name: t.bookForm.adjustCrop })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
+    expect(screen.getByText(t.bookValidation.page_count_required)).toBeOnTheScreen();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('a newly picked image is kept whole by default and can be cropped', async () => {
+    const picked = { uri: 'file:///picked.jpg', width: 1200, height: 900 };
+    mockCovers.pickFromGallery.mockResolvedValue({ ok: true, data: picked });
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(
+      <BookForm
+        initialValues={{ ...emptyBookForm, title: 'Herbario', pages: '96' }}
+        onSubmit={onSubmit}
+        onCancel={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: t.bookForm.adjustCrop })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.addCover }));
+    // The add form asks where the image comes from.
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.coverFromGallery }));
+    // No crop yet: the picked image itself is the preview.
+    expect(mockCovers.renderPreview).not.toHaveBeenCalled();
+    expect(screen.getByTestId('book-cover-image').props.source).toEqual([
+      expect.objectContaining({ uri: picked.uri }),
+    ]);
+
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.adjustCrop }));
+    expect(mockCovers.measure).toHaveBeenCalledWith(picked.uri);
+    await fireEvent(screen.getByTestId('crop-area'), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 344, height: 544 } },
+    });
+    await screen.findByTestId('crop-frame');
+    await fireEvent.press(screen.getByRole('button', { name: t.cropEditor.apply }));
+    expect(mockCovers.renderPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: picked.uri, crop: expect.any(Object) }),
+    );
+
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
+    const [, cover] = onSubmit.mock.calls[0] as unknown as [unknown, LocalImage];
+    expect(cover.uri).toBe(picked.uri);
+    // The largest frame with the cover proportions inside a landscape photo: full height.
+    expect(cover.crop!.height).toBeCloseTo(1);
+    expect((cover.crop!.width * 1200) / (cover.crop!.height * 900)).toBeCloseTo(
+      1 / COVER_ASPECT,
+      3,
+    );
+  });
+
+  it('cancelling the crop editor keeps the image as it was', async () => {
+    const picked = { uri: 'file:///picked.jpg', width: 1200, height: 900 };
+    mockCovers.pickFromGallery.mockResolvedValue({ ok: true, data: picked });
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(
+      <BookForm
+        initialValues={{ ...emptyBookForm, title: 'Herbario', pages: '96' }}
+        onSubmit={onSubmit}
+        onCancel={jest.fn()}
+      />,
+    );
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.addCover }));
+    // The add form asks where the image comes from.
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.coverFromGallery }));
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.adjustCrop }));
+    // The form has its own Cancelar; the editor (rendered with the cover row) comes first.
+    const cancels = screen.getAllByRole('button', { name: t.cropEditor.cancel });
+    await fireEvent.press(cancels[0]);
+    expect(screen.queryByText(t.cropEditor.hint)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.anything(), picked);
+  });
+
+  it('asks for a rating only when the status is Leído, and drops it otherwise', async () => {
+    const onSubmit = jest.fn(async () => ({ ok: true as const }));
+    await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
+    expect(screen.queryByText(t.bookForm.ratingLabel)).toBeNull();
+
+    await fireEvent.press(screen.getByRole('radio', { name: t.readingStatus.finished }));
+    expect(screen.getByText(t.bookForm.ratingLabel)).toBeOnTheScreen();
+    await fireEvent.press(
+      screen.getByRole('radio', { name: format(t.rating.starMany, { value: 5 }) }),
+    );
+
+    await fireEvent.press(screen.getByRole('radio', { name: t.readingStatus.to_read }));
+    expect(screen.queryByText(t.bookForm.ratingLabel)).toBeNull();
+  });
+
   it('keeps the entered data and shows the error when saving fails', async () => {
     const onSubmit = jest.fn(async () => ({ ok: false as const, message: 'server says no' }));
     await renderUi(<BookForm onSubmit={onSubmit} onCancel={jest.fn()} />);
-    await fireEvent.changeText(screen.getByLabelText(t.bookForm.titleLabel), 'Herbario');
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.titleLabel)), 'Herbario');
+    await fireEvent.changeText(screen.getByLabelText(required(t.bookForm.pagesLabel)), '120');
     await fireEvent.press(screen.getByRole('button', { name: t.bookForm.save }));
     expect(await screen.findByText('server says no')).toBeOnTheScreen();
     expect(screen.getByDisplayValue('Herbario')).toBeOnTheScreen();
