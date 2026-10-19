@@ -1,40 +1,132 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
-import { Chip } from '@/components/Chip';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { SegmentedControl } from '@/components/SegmentedControl';
-import { SyncStatusBadge } from '@/components/SyncStatusBadge';
 import { useToast } from '@/components/Toast';
 import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { fonts, radii, sizes, spacing } from '@/design/tokens';
-import { useMockData } from '@/features/_mock/mockData';
 import { authErrorMessage } from '@/features/auth/authErrors';
+import { CropEditor } from '@/features/library/CropEditor';
+import type { LocalImage } from '@/features/library/coverService';
+import { PreferencesSection } from '@/features/preferences/PreferencesSection';
+import { AvatarSheet } from '@/features/profile/AvatarSheet';
 import { useDisplayName } from '@/features/profile/displayName';
 import { EditNameSheet } from '@/features/profile/EditNameSheet';
+import { ProfileAvatar } from '@/features/profile/ProfileAvatar';
+import { signOutFlow } from '@/features/sync/signOutFlow';
+import { SyncBadge } from '@/features/sync/SyncBadge';
+import { lastSyncText, syncBadgeFor, syncStatusText } from '@/features/sync/syncPresentation';
 import { format, t } from '@/i18n';
 import { formatMonthYear } from '@/lib/dates';
-import { checkSupabaseHealth, type HealthResult } from '@/lib/supabaseHealth';
 import { useAuthStore } from '@/stores/authStore';
 import { useProfileStore } from '@/stores/profileStore';
+import { useSyncStore } from '@/stores/syncStore';
 import type { ThemeMode } from '@/stores/themeStore';
 
 const PADDING = spacing.lg + spacing.xs;
-type GenreKey = keyof typeof t.profile.genres;
-type PrefKey = keyof typeof t.profile.prefs;
-const GENRES = Object.keys(t.profile.genres) as GenreKey[];
-const PREFS = Object.keys(t.profile.prefs) as PrefKey[];
+/** Display (44 lineHeight) still fits the 64 px circle at this scale. */
+const MONOGRAM_MAX_SCALE = 1.4;
 
 const themeOptions = [
   { value: 'light', label: t.theme.light },
   { value: 'dark', label: t.theme.dark },
   { value: 'system', label: t.theme.system },
 ] as const satisfies readonly { value: ThemeMode; label: string }[];
+
+/**
+ * The avatar button: opens "Foto de perfil"; a taken or chosen image goes through the square
+ * crop step (circular guide) and is saved locally and synced by the profile store.
+ */
+function AvatarButton({ displayName }: { displayName: string | null }) {
+  const { colors } = useTheme();
+  const toast = useToast();
+  const canEdit = useProfileStore((state) => state.profile !== null);
+  const hasPhoto = useProfileStore((state) => Boolean(state.profile?.avatarPath));
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [picked, setPicked] = useState<LocalImage | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const save = async (image: LocalImage) => {
+    setPicked(null);
+    setSaving(true);
+    const ok = await useProfileStore.getState().setAvatar(image);
+    setSaving(false);
+    toast.show(ok ? t.profile.avatar.saved : t.profile.avatar.failed, ok ? 'success' : 'error');
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    const ok = await useProfileStore.getState().removeAvatar();
+    setSaving(false);
+    toast.show(
+      ok ? t.profile.avatar.removed : t.profile.avatar.removeFailed,
+      ok ? 'success' : 'error',
+    );
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setSheetOpen(true)}
+        disabled={!canEdit || saving}
+        accessibilityRole="button"
+        accessibilityLabel={hasPhoto ? t.profile.avatar.changeA11y : t.profile.avatar.addA11y}
+        accessibilityState={{ disabled: !canEdit || saving, busy: saving }}
+        style={[styles.avatar, { backgroundColor: colors.actionPrimary }]}
+        testID="profile-avatar-button"
+      >
+        <ProfileAvatar
+          fallback={
+            // Monogram capped so large text sizes do not clip it inside the fixed circle.
+            displayName ? (
+              <AppText
+                variant="display"
+                color="actionPrimaryText"
+                maxFontSizeMultiplier={MONOGRAM_MAX_SCALE}
+              >
+                {displayName.charAt(0).toLocaleUpperCase()}
+              </AppText>
+            ) : (
+              <Icon name="user" size={28} color={colors.actionPrimaryText} />
+            )
+          }
+        />
+        {saving ? (
+          <ActivityIndicator
+            style={StyleSheet.absoluteFill}
+            color={colors.actionPrimaryText}
+            accessibilityLabel={t.profile.avatar.saving}
+          />
+        ) : null}
+      </Pressable>
+      <AvatarSheet
+        visible={sheetOpen}
+        hasPhoto={hasPhoto}
+        onClose={() => setSheetOpen(false)}
+        onPicked={setPicked}
+        onRemove={() => void remove()}
+      />
+      {picked ? (
+        <CropEditor
+          image={picked}
+          initialCrop={null}
+          aspect={1}
+          circleGuide
+          title={t.profile.avatar.cropTitle}
+          hint={t.profile.avatar.cropHint}
+          onApply={(crop) => void save({ ...picked, crop })}
+          onCancel={() => setPicked(null)}
+        />
+      ) : null}
+    </>
+  );
+}
 
 function ReaderCard() {
   const { colors, scheme } = useTheme();
@@ -69,15 +161,7 @@ function ReaderCard() {
       </View>
       <View style={[styles.dashed, { borderColor: colors.accent }]} />
       <View style={styles.cardBody}>
-        <View style={[styles.avatar, { backgroundColor: colors.actionPrimary }]}>
-          {displayName ? (
-            <AppText variant="display" color="actionPrimaryText">
-              {displayName.charAt(0).toLocaleUpperCase()}
-            </AppText>
-          ) : (
-            <Icon name="user" size={28} color={colors.actionPrimaryText} />
-          )}
-        </View>
+        <AvatarButton displayName={displayName} />
         <View style={styles.flex}>
           <AppText variant="title" numberOfLines={2}>
             {name}
@@ -108,16 +192,67 @@ function ReaderCard() {
   );
 }
 
+function SyncSection() {
+  const { colors } = useTheme();
+  const status = useSyncStore((state) => state.status);
+  const pendingCount = useSyncStore((state) => state.pendingCount);
+  const failedCount = useSyncStore((state) => state.failedCount);
+  const lastSyncAt = useSyncStore((state) => state.lastSyncAt);
+  const badge = syncBadgeFor({ status, pendingCount, failedCount });
+  return (
+    <View style={[styles.syncSection, { borderBottomColor: colors.border }]}>
+      <View style={styles.syncRow}>
+        <AppText variant="label" style={styles.flex}>
+          {t.profile.syncLabel}
+        </AppText>
+        <SyncBadge />
+      </View>
+      <View style={styles.gapXs} accessibilityLiveRegion="polite">
+        <AppText variant="body" color={badge.kind === 'error' ? 'danger' : 'textPrimary'}>
+          {syncStatusText(badge)}
+        </AppText>
+        <AppText variant="caption">{lastSyncText(lastSyncAt, new Date())}</AppText>
+      </View>
+      <View style={styles.syncActions}>
+        {failedCount > 0 ? (
+          <Button
+            icon="refresh"
+            label={t.sync.retry}
+            onPress={() => void useSyncStore.getState().retryFailed()}
+          />
+        ) : null}
+        <Button
+          variant="secondary"
+          icon="refresh"
+          label={t.sync.syncNow}
+          loading={status === 'syncing'}
+          onPress={() => void useSyncStore.getState().syncNow()}
+        />
+      </View>
+    </View>
+  );
+}
+
+type SignOutStep = 'idle' | 'confirm' | 'confirmUnsynced';
+
 function SignOutButton() {
   const toast = useToast();
-  const [confirming, setConfirming] = useState(false);
+  const [step, setStep] = useState<SignOutStep>('idle');
   const [busy, setBusy] = useState(false);
 
-  const signOut = async () => {
+  // Unsynced changes get a final sync first; if some remain, the user must confirm.
+  const start = async () => {
     setBusy(true);
-    const result = await useAuthStore.getState().signOut();
+    const check = await signOutFlow.prepare();
     setBusy(false);
-    setConfirming(false);
+    setStep(check === 'clean' ? 'confirm' : 'confirmUnsynced');
+  };
+
+  const signOut = async () => {
+    setStep('idle');
+    setBusy(true);
+    const result = await signOutFlow.signOut();
+    setBusy(false);
     // On success the route guard returns to the login screen.
     if (!result.ok) toast.show(authErrorMessage(result.error), 'error');
   };
@@ -129,72 +264,37 @@ function SignOutButton() {
         icon="log-out"
         label={t.profile.signOut}
         loading={busy}
-        onPress={() => setConfirming(true)}
+        onPress={start}
       />
       <ConfirmDialog
-        visible={confirming}
+        visible={step === 'confirm'}
         destructive
         title={t.profile.signOutTitle}
         message={t.profile.signOutMessage}
         confirmLabel={t.profile.signOut}
         cancelLabel={t.bookDetail.cancel}
-        onCancel={() => setConfirming(false)}
+        onCancel={() => setStep('idle')}
+        onConfirm={signOut}
+      />
+      <ConfirmDialog
+        visible={step === 'confirmUnsynced'}
+        destructive
+        title={t.profile.signOutUnsyncedTitle}
+        message={t.profile.signOutUnsyncedMessage}
+        confirmLabel={t.profile.signOutAnyway}
+        cancelLabel={t.bookDetail.cancel}
+        onCancel={() => setStep('idle')}
         onConfirm={signOut}
       />
     </View>
   );
 }
 
-function PreferenceRow({ prefKey, initial }: { prefKey: PrefKey; initial: boolean }) {
-  const { colors } = useTheme();
-  const [value, setValue] = useState(initial);
-  const copy = t.profile.prefs[prefKey];
-  return (
-    <View style={[styles.prefRow, { borderBottomColor: colors.border }]}>
-      <View style={styles.flex}>
-        <AppText variant="body" style={styles.semibold}>
-          {copy.title}
-        </AppText>
-        <AppText variant="caption">{copy.text}</AppText>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={setValue}
-        accessibilityLabel={copy.title}
-        accessibilityHint={copy.text}
-        trackColor={{ false: colors.track, true: colors.actionPrimary }}
-        thumbColor={colors.switchThumb}
-        ios_backgroundColor={colors.track}
-      />
-    </View>
-  );
-}
-
-function DevTools() {
+/** Development builds only: the way into the component gallery and its dev switches. */
+function DevGalleryLink() {
   const router = useRouter();
-  const [health, setHealth] = useState<HealthResult | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    checkSupabaseHealth().then((value) => {
-      if (active) setHealth(value);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const message =
-    health === null
-      ? t.health.checking
-      : health.status === 'ok'
-        ? t.health.ok
-        : t.health.errors[health.code];
-
   return (
     <View style={styles.section}>
-      <AppText variant="label">{t.health.title}</AppText>
-      <AppText variant="caption">{message}</AppText>
       <Button
         variant="link"
         label={t.profile.devGallery}
@@ -205,19 +305,12 @@ function DevTools() {
 }
 
 export default function ProfileScreen() {
-  const data = useMockData();
-  const { colors, mode, setMode } = useTheme();
+  const { mode, setMode } = useTheme();
   // Local theme changes immediately; the profile copy is saved best-effort (silent on failure).
   const changeTheme = (next: ThemeMode) => {
     setMode(next);
     void useProfileStore.getState().saveTheme(next);
   };
-  const [genres, setGenres] = useState<GenreKey[]>([...data.profile.favoriteGenres]);
-  const toggleGenre = (genre: GenreKey) =>
-    setGenres((current) =>
-      current.includes(genre) ? current.filter((g) => g !== genre) : [...current, genre],
-    );
-
   return (
     <Screen scroll contentStyle={styles.content}>
       <AppText variant="display" accessibilityRole="header" style={styles.title}>
@@ -225,28 +318,7 @@ export default function ProfileScreen() {
       </AppText>
       <ReaderCard />
 
-      <View style={styles.section}>
-        <AppText variant="label">{t.profile.genresLabel}</AppText>
-        <View style={styles.chips}>
-          {GENRES.map((genre) => (
-            <Chip
-              key={genre}
-              label={t.profile.genres[genre]}
-              selected={genres.includes(genre)}
-              onPress={() => toggleGenre(genre)}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View>
-        <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
-          <AppText variant="label">{t.profile.recommendLabel}</AppText>
-        </View>
-        {PREFS.map((key) => (
-          <PreferenceRow key={key} prefKey={key} initial={data.profile.preferences[key]} />
-        ))}
-      </View>
+      <PreferencesSection />
 
       <View style={styles.section}>
         <AppText variant="label">{t.profile.appearanceLabel}</AppText>
@@ -258,17 +330,11 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <View style={[styles.syncRow, { borderBottomColor: colors.border }]}>
-        <View style={[styles.flex, styles.gapXs]}>
-          <AppText variant="label">{t.profile.syncLabel}</AppText>
-          <AppText variant="caption">{t.profile.syncText}</AppText>
-        </View>
-        <SyncStatusBadge status={data.syncStatus} />
-      </View>
+      <SyncSection />
 
       <SignOutButton />
 
-      {__DEV__ ? <DevTools /> : null}
+      {__DEV__ ? <DevGalleryLink /> : null}
     </Screen>
   );
 }
@@ -297,28 +363,19 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   sinceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   semibold: { fontFamily: fonts.sansSemiBold },
   flex: { flex: 1 },
   gapXs: { gap: spacing.xs },
   section: { gap: spacing.md },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  sectionHeader: { borderBottomWidth: sizes.borderWidth, paddingBottom: spacing.md },
-  prefRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: sizes.borderWidth,
-    minHeight: sizes.minTouchTarget,
-  },
-  syncRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  syncSection: {
     gap: spacing.md,
     paddingBottom: spacing.lg,
     borderBottomWidth: sizes.borderWidth,
   },
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  syncActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   signOut: { alignItems: 'flex-start' },
 });
