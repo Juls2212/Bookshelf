@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 import * as authService from '@/features/auth/authService';
 
-export type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
+type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
 
 type AuthState = {
   status: AuthStatus;
