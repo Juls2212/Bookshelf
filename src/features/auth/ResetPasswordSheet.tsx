@@ -6,6 +6,8 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
 import { format, t } from '@/i18n';
+import { INPUT_LIMITS } from '@/lib/inputLimits';
+import { emailInput } from '@/lib/inputSanitizers';
 
 import { authErrorMessage, validationMessage, type AuthErrorCode } from './authErrors';
 import * as authService from './authService';
@@ -58,9 +60,12 @@ export function ResetPasswordSheet({ initialEmail, onClose }: Props) {
         label={t.auth.login.emailLabel}
         placeholder={t.auth.login.emailPlaceholder}
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => setEmail(emailInput(text, INPUT_LIMITS.email))}
         keyboardType="email-address"
+        inputMode="email"
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={INPUT_LIMITS.email}
         autoComplete="email"
         textContentType="emailAddress"
         errorText={fieldError ? validationMessage(fieldError) : undefined}
