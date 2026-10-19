@@ -4,10 +4,29 @@ import { useAuthStore } from '@/stores/authStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useThemeStore } from '@/stores/themeStore';
 
+import type { Profile } from './profileRepository';
+
 /**
- * Loads the profile whenever the signed-in user changes and applies the theme rule:
- * after sign-up the local theme is pushed to the profile; after sign-in the profile wins.
- * Clears profile data on sign-out. Mounted once in the root layout.
+ * Applies the theme rule when a profile becomes available or changes (cached or pulled):
+ * after sign-up the local theme is pushed to the profile; otherwise the profile wins (it holds
+ * the latest synced choice, and local edits are saved into it first, so they already match).
+ */
+function reconcileTheme(profile: Profile): void {
+  const { themeSyncIntent, saveTheme, setThemeSyncIntent } = useProfileStore.getState();
+  const theme = useThemeStore.getState();
+  // Cleared first: saveTheme updates the profile, which calls this again.
+  if (themeSyncIntent !== 'none') setThemeSyncIntent('none');
+  if (themeSyncIntent === 'push') {
+    if (profile.theme !== theme.mode) void saveTheme(theme.mode);
+  } else if (profile.theme !== theme.mode) {
+    theme.setMode(profile.theme);
+  }
+}
+
+/**
+ * Loads the cached profile whenever the signed-in user changes, reapplies the theme rule
+ * whenever the profile changes (e.g. after the sync engine pulls it) and clears it on
+ * sign-out. Mounted once in the root layout.
  */
 export function useProfileSync(): void {
   const userId = useAuthStore((state) => state.user?.id ?? null);
@@ -18,20 +37,10 @@ export function useProfileSync(): void {
       profileStore.clear();
       return;
     }
-    let active = true;
-    profileStore.load(userId).then((result) => {
-      if (!active || !result.ok) return;
-      const { themeSyncIntent, saveTheme, setThemeSyncIntent } = useProfileStore.getState();
-      const theme = useThemeStore.getState();
-      if (themeSyncIntent === 'push') {
-        saveTheme(theme.mode);
-      } else if (themeSyncIntent === 'pull' && result.data.theme !== theme.mode) {
-        theme.setMode(result.data.theme);
-      }
-      setThemeSyncIntent('none');
+    const unsubscribe = useProfileStore.subscribe((state, previous) => {
+      if (state.profile && state.profile !== previous.profile) reconcileTheme(state.profile);
     });
-    return () => {
-      active = false;
-    };
+    void profileStore.load(userId);
+    return unsubscribe;
   }, [userId]);
 }
