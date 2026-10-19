@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/design/ThemeProvider';
 import { radii, sizes, spacing, typeScale } from '@/design/tokens';
 
-export type SegmentOption<T extends string> = { value: T; label: string };
+type SegmentOption<T extends string> = { value: T; label: string };
 
 type Props<T extends string> = {
   options: readonly SegmentOption<T>[];
