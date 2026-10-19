@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react';
+import { memo, useState, type ReactElement } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -50,7 +50,13 @@ type ShelfRowProps = {
   motionFor?: (book: BookTileData, index: number) => ShelfMotionKind;
 };
 
-function ShelfRow({ row, columnWidth, horizontalPadding, onPressBook, motionFor }: ShelfRowProps) {
+const ShelfRow = memo(function ShelfRow({
+  row,
+  columnWidth,
+  horizontalPadding,
+  onPressBook,
+  motionFor,
+}: ShelfRowProps) {
   const coverArea = Math.round(columnWidth * COVER_ASPECT);
   return (
     <View style={[styles.row, { paddingHorizontal: horizontalPadding }]}>
@@ -72,7 +78,7 @@ function ShelfRow({ row, columnWidth, horizontalPadding, onPressBook, motionFor 
       })}
     </View>
   );
-}
+});
 
 // Four columns with a 9px wooden shelf under every row of covers.
 export function BookShelfGrid({
