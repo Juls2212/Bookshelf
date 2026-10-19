@@ -8,15 +8,29 @@
     "scheme": "bookshelf",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.bookshelf.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Bookshelf usa la cámara para fotografiar la portada o el lomo de un libro y proponerte sus datos.",
+        "NSPhotoLibraryUsageDescription": "Bookshelf usa tus fotos solo cuando eliges una imagen como portada de un libro."
+      }
     },
     "android": {
+      "package": "com.bookshelf.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F4EBDC",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": ["android.permission.CAMERA"],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.VIBRATE"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -28,12 +42,30 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#F4EBDC",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 200
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Bookshelf usa la cámara para fotografiar la portada o el lomo de un libro y proponerte sus datos.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bookshelf usa tus fotos solo cuando eliges una imagen como portada de un libro.",
+          "cameraPermission": "Bookshelf usa la cámara para fotografiar la portada o el lomo de un libro y proponerte sus datos.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
