@@ -13,6 +13,15 @@ export const motion = {
     durationMs: 400,
     offsetY: -28,
   },
+  /** A new recommendation in the Librero: the card rises a few px and fades in. */
+  recommendationArrival: {
+    durationMs: 400,
+    offsetY: 16,
+  },
+  /** Updating the page: the bookmark ribbon slides to its new place on a soft curve. */
+  bookmarkSlide: {
+    durationMs: 280,
+  },
 } as const;
 
 /** Total time of the shelf arrival sequence (used to stop animating late mounts). */
