@@ -10,7 +10,7 @@ import { format, t } from '@/i18n';
 
 import { StatusTag } from './StatusTag';
 
-export type BookCoverSize = 'sm' | 'md' | 'lg' | 'xl';
+type BookCoverSize = 'sm' | 'md' | 'lg' | 'xl';
 
 const coverWidths: Record<BookCoverSize, number> = { sm: 56, md: 80, lg: 120, xl: 160 };
 export const COVER_ASPECT = 1.42;
