@@ -17,6 +17,11 @@ export interface Book {
    * `coverPath` by the cover service.
    */
   coverUri?: string | null;
+  /**
+   * Local copy of the cover on this device (documents/covers/{userId}/{bookId}.jpg), preferred
+   * over the remote file. Local-only; never sent to the server.
+   */
+  localCoverUri?: string | null;
   readingStatus: ReadingStatus;
   currentPage: number | null;
   /** 1-5, null when not rated. */
