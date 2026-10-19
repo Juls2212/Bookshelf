@@ -7,9 +7,9 @@ import {
   type ValidationErrorCode,
 } from './validation';
 
-export type FormErrors<K extends string> = Partial<Record<K, ValidationErrorCode>>;
+type FormErrors<K extends string> = Partial<Record<K, ValidationErrorCode>>;
 
-export type LoginValues = { email: string; password: string };
+type LoginValues = { email: string; password: string };
 export type RegisterValues = {
   displayName: string;
   email: string;
