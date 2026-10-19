@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { validationMessage } from '@/features/auth/authErrors';
 import { NAME_MAX_LENGTH, validateDisplayName } from '@/features/auth/validation';
 import { t } from '@/i18n';
+import { lineInput } from '@/lib/inputSanitizers';
 import { useProfileStore } from '@/stores/profileStore';
 
 type Props = { initialName: string; onClose: () => void };
@@ -44,10 +45,11 @@ export function EditNameSheet({ initialName, onClose }: Props) {
         label={t.auth.register.nameLabel}
         placeholder={t.auth.register.namePlaceholder}
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => setName(lineInput(text, NAME_MAX_LENGTH))}
         autoCapitalize="words"
         autoComplete="name"
-        maxLength={NAME_MAX_LENGTH + 20}
+        textContentType="name"
+        maxLength={NAME_MAX_LENGTH}
         returnKeyType="done"
         onSubmitEditing={save}
         errorText={error ? validationMessage(error) : undefined}
