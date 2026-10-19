@@ -7,7 +7,10 @@ import { BookCover } from '@/components/BookCover';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Button } from '@/components/Button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { ProgressBar } from '@/components/ProgressBar';
+import { ProgressSlider } from '@/components/ProgressSlider';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import { Screen } from '@/components/Screen';
 import { ShelfLine } from '@/components/ShelfLine';
 import { Skeleton } from '@/components/Skeleton';
@@ -22,15 +25,22 @@ import { bookErrorMessage } from '@/features/library/bookRepository';
 import {
   bookValidationMessage,
   LENT_TO_MAX_LENGTH,
+  NOTES_MAX_LENGTH,
   validateLentTo,
+  validateNotes,
 } from '@/features/library/bookValidation';
 import { relatedBooks } from '@/features/library/filterBooks';
+import { getProgressPercent, toggleRating } from '@/features/library/readingRules';
+import { UpdatePageSheet } from '@/features/library/UpdatePageSheet';
+import { useSaveCurrentPage } from '@/features/library/useSaveCurrentPage';
 import { useCoverUris, type WithCover } from '@/features/library/useCoverUris';
 import { format, t } from '@/i18n';
-import { computeProgressPercent, isLent } from '@/lib/book';
+import { isLent } from '@/lib/book';
 import { formatDayMonth, formatRelativeDays } from '@/lib/dates';
+import { NOTES_COUNTER_FROM } from '@/lib/inputLimits';
+import { lineInput, multilineInput } from '@/lib/inputSanitizers';
 import { useLibraryStore } from '@/stores/libraryStore';
-import type { Book } from '@/types/book';
+import type { Book, ReadingStatus } from '@/types/book';
 
 const PADDING = spacing.lg + spacing.xs;
 const RELATED_LIMIT = 6;
@@ -82,7 +92,18 @@ function statusDateLine(book: Book): string | null {
   return format(t.bookDetail.statusSince, { date: formatDayMonth(new Date(book.statusChangedAt)) });
 }
 
-function StatusCard({ book }: { book: Book }) {
+const statusOptions = (['to_read', 'reading', 'finished'] as const).map((value) => ({
+  value,
+  label: t.readingStatus[value],
+}));
+
+function StatusCard({
+  book,
+  onChangeStatus,
+}: {
+  book: Book;
+  onChangeStatus: (status: ReadingStatus) => void;
+}) {
   const { colors } = useTheme();
   const dateLine = statusDateLine(book);
   return (
@@ -95,6 +116,16 @@ function StatusCard({ book }: { book: Book }) {
       </View>
       <AppText variant="heading">{t.readingStatus[book.readingStatus]}</AppText>
       {dateLine ? <AppText variant="caption">{dateLine}</AppText> : null}
+      <View style={styles.statusSelector}>
+        <SegmentedControl<ReadingStatus>
+          options={statusOptions}
+          value={book.readingStatus}
+          onChange={(status) => {
+            if (status !== book.readingStatus) onChangeStatus(status);
+          }}
+          accessibilityLabel={t.reading.statusSelectorLabel}
+        />
+      </View>
     </View>
   );
 }
@@ -113,19 +144,30 @@ function LoanCard({ book }: { book: Book }) {
       <AppText variant="heading" color="danger">
         {t.bookDetail.loanTitle}
       </AppText>
-      <AppText variant="caption">
+      <AppText variant="caption" numberOfLines={3}>
         {format(t.bookDetail.loanTo, { name: book.lentTo ?? '', when })}
       </AppText>
     </View>
   );
 }
 
-/** Read-only in this phase: page updates arrive with the reading actions (Phase 4). */
-function ProgressCard({ book }: { book: Book }) {
+function ProgressCard({
+  book,
+  onUpdate,
+  ribbonFrom,
+}: {
+  book: Book;
+  onUpdate: () => void;
+  /** Where the bookmark starts when the card appears (status just changed to reading). */
+  ribbonFrom?: number;
+}) {
   const { colors } = useTheme();
-  const current = book.currentPage ?? 0;
+  const savePage = useSaveCurrentPage();
+  // Live page while the bookmark is being dragged; the labels follow it.
+  const [previewPage, setPreviewPage] = useState<number | null>(null);
+  const current = previewPage ?? book.currentPage ?? 0;
   const total = book.pageCount;
-  const percent = total ? computeProgressPercent(current, total) : null;
+  const percent = getProgressPercent({ currentPage: current, pageCount: total });
   const left = total ? Math.max(0, total - current) : null;
   return (
     <View style={[styles.progressCard, { backgroundColor: colors.surface }]}>
@@ -137,7 +179,17 @@ function ProgressCard({ book }: { book: Book }) {
           </AppText>
         ) : null}
       </View>
-      {percent !== null ? <ProgressBar percent={percent} /> : null}
+      {total ? (
+        <ProgressSlider
+          page={book.currentPage ?? 0}
+          pageCount={total}
+          onPreview={setPreviewPage}
+          onCommit={(page) => savePage(book, page)}
+          animateFrom={ribbonFrom}
+        />
+      ) : percent !== null ? (
+        <ProgressBar percent={percent} animated animateFrom={ribbonFrom} />
+      ) : null}
       <View style={styles.between}>
         <AppText variant="title">
           {format(t.bookDetail.pageNumber, { page: current })}
@@ -154,6 +206,7 @@ function ProgressCard({ book }: { book: Book }) {
           </AppText>
         ) : null}
       </View>
+      <Button icon="pencil" label={t.bookDetail.updatePage} onPress={onUpdate} />
     </View>
   );
 }
@@ -218,7 +271,7 @@ function LoanSheet({ book, onClose }: { book: Book; onClose: () => void }) {
     const result = await useLibraryStore.getState().lend(book.id, name);
     setSaving(false);
     if (result.ok) {
-      toast.show(format(t.bookDetail.lentToast, { name: name.trim() }), 'success');
+      toast.show(format(t.toast.lentTo, { name: name.trim() }), 'success');
       onClose();
     } else {
       toast.show(bookErrorMessage(result.error), 'error');
@@ -231,7 +284,7 @@ function LoanSheet({ book, onClose }: { book: Book; onClose: () => void }) {
         label={t.bookDetail.loanNameLabel}
         placeholder={t.bookDetail.loanNamePlaceholder}
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => setName(lineInput(text, LENT_TO_MAX_LENGTH))}
         autoCapitalize="words"
         maxLength={LENT_TO_MAX_LENGTH}
         returnKeyType="done"
@@ -246,11 +299,127 @@ function LoanSheet({ book, onClose }: { book: Book; onClose: () => void }) {
   );
 }
 
+function NotesBlock({ book }: { book: Book }) {
+  const toast = useToast();
+  const { colors } = useTheme();
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const editing = draft !== null;
+  const length = draft ? Array.from(draft).length : 0;
+  const issue = editing ? validateNotes(draft) : null;
+
+  const save = async () => {
+    if (draft === null || issue) return;
+    setSaving(true);
+    const result = await useLibraryStore.getState().updateNotes(book.id, draft);
+    setSaving(false);
+    if (!result.ok) {
+      // Keep the draft so nothing typed is lost.
+      toast.show(bookErrorMessage(result.error), 'error');
+      return;
+    }
+    toast.show(result.data.notes ? t.reading.notesSaved : t.reading.notesCleared, 'success');
+    setDraft(null);
+  };
+
+  if (editing) {
+    return (
+      <View style={styles.gapSm}>
+        <TextField
+          label={t.bookDetail.notesLabel}
+          placeholder={t.reading.notesPlaceholder}
+          value={draft}
+          onChangeText={(text) => setDraft(multilineInput(text, NOTES_MAX_LENGTH))}
+          multiline
+          autoCapitalize="sentences"
+          autoFocus
+          maxLength={NOTES_MAX_LENGTH}
+          helperText={
+            length >= NOTES_COUNTER_FROM
+              ? format(t.reading.notesCounter, { count: length, max: NOTES_MAX_LENGTH })
+              : undefined
+          }
+          errorText={issue ? bookValidationMessage(issue) : undefined}
+        />
+        <View style={styles.notesActions}>
+          <View style={styles.flex}>
+            <Button label={t.reading.notesSave} onPress={save} loading={saving} />
+          </View>
+          <View style={styles.flex}>
+            <Button
+              variant="secondary"
+              label={t.reading.cancel}
+              onPress={() => setDraft(null)}
+              disabled={saving}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.gapSm}>
+      <AppText variant="label">{t.bookDetail.notesLabel}</AppText>
+      <Pressable
+        onPress={() => setDraft(book.notes ?? '')}
+        accessibilityRole="button"
+        accessibilityLabel={book.notes ? t.reading.notesEdit : t.reading.notesAdd}
+        accessibilityHint={book.notes ?? undefined}
+        style={styles.notesTap}
+      >
+        {book.notes ? (
+          <AppText
+            variant="italicNote"
+            color="textPrimary"
+            style={[styles.note, { borderBottomColor: colors.border }]}
+          >
+            {book.notes}
+          </AppText>
+        ) : (
+          <View style={styles.notesEmpty}>
+            <Icon name="pencil" size={sizes.iconSm} color={colors.accentText} />
+            <AppText variant="caption" color="accentText">
+              {t.reading.notesAdd}
+            </AppText>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 function BookDetail({ book, related }: { book: WithCover<Book>; related: WithCover<Book>[] }) {
   const router = useRouter();
   const toast = useToast();
-  const { colors } = useTheme();
-  const [sheet, setSheet] = useState<'none' | 'options' | 'loan'>('none');
+  const [sheet, setSheet] = useState<'none' | 'options' | 'loan' | 'page'>('none');
+  const [pendingStatus, setPendingStatus] = useState<ReadingStatus | null>(null);
+  // Becoming "reading" makes the bookmark slide in from the start of the line.
+  const [ribbonFrom, setRibbonFrom] = useState<number | undefined>(undefined);
+
+  const rate = async (tapped: number) => {
+    const next = toggleRating(book.rating, tapped);
+    const result = await useLibraryStore.getState().updateRating(book.id, next);
+    if (result.ok) toast.show(next ? t.reading.ratingSaved : t.reading.ratingCleared, 'success');
+    else toast.show(bookErrorMessage(result.error), 'error');
+  };
+
+  const changeStatus = async (status: ReadingStatus) => {
+    setPendingStatus(null);
+    setRibbonFrom(status === 'reading' ? 0 : undefined);
+    // Optimistic in the store: the card, progress and shelf update immediately.
+    const result = await useLibraryStore.getState().updateReadingStatus(book.id, status);
+    if (result.ok) {
+      toast.show(format(t.reading.statusChanged, { status: t.readingStatus[status] }), 'success');
+    } else {
+      toast.show(bookErrorMessage(result.error), 'error');
+    }
+  };
+  // Leaving "finished" asks first (it resets the finished state and may move the page).
+  const requestStatus = (status: ReadingStatus) => {
+    if (book.readingStatus === 'finished') setPendingStatus(status);
+    else changeStatus(status);
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const lent = isLent(book);
@@ -265,7 +434,7 @@ function BookDetail({ book, related }: { book: WithCover<Book>; related: WithCov
   const returnBook = async () => {
     setSheet('none');
     const result = await useLibraryStore.getState().returnBook(book.id);
-    if (result.ok) toast.show(t.bookDetail.returnedToast, 'success');
+    if (result.ok) toast.show(t.toast.markedReturned, 'success');
     else toast.show(bookErrorMessage(result.error), 'error');
   };
 
@@ -279,110 +448,130 @@ function BookDetail({ book, related }: { book: WithCover<Book>; related: WithCov
       toast.show(bookErrorMessage(result.error), 'error');
       return;
     }
-    toast.show(t.bookDetail.deletedToast, 'success');
+    toast.show(t.toast.bookDeleted, 'success');
     router.back();
   };
 
   return (
-    <Screen scroll edges={['top', 'bottom', 'left', 'right']} contentStyle={styles.content}>
-      <Header onMore={() => setSheet('options')} />
+    <Screen edges={['top', 'bottom', 'left', 'right']} contentStyle={styles.noPadding}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
+        <Header onMore={() => setSheet('options')} />
 
-      <View style={styles.top}>
-        <BookCover
-          title={book.title}
-          author={book.author}
-          coverUri={book.coverUri}
-          coverCacheKey={book.coverCacheKey}
-          size="lg"
-          ribbon={book.readingStatus === 'reading'}
-        />
-        <View style={[styles.flex, styles.gapSm]}>
-          {meta ? <AppText variant="label">{meta}</AppText> : null}
-          <AppText variant="title" accessibilityRole="header">
-            {book.title}
-          </AppText>
-          {book.author ? (
-            <AppText variant="body" color="textSecondary">
-              {book.author}
+        <View style={styles.top}>
+          <BookCover
+            title={book.title}
+            author={book.author}
+            coverUri={book.coverUri}
+            coverCacheKey={book.coverCacheKey}
+            size="lg"
+            ribbon={book.readingStatus === 'reading'}
+          />
+          <View style={[styles.flex, styles.gapSm]}>
+            {meta ? <AppText variant="label">{meta}</AppText> : null}
+            <AppText variant="title" accessibilityRole="header" numberOfLines={6}>
+              {book.title}
             </AppText>
-          ) : null}
-        </View>
-      </View>
-
-      <StatusCard book={book} />
-      {lent ? <LoanCard book={book} /> : null}
-      {book.readingStatus === 'reading' ? <ProgressCard book={book} /> : null}
-
-      <View style={styles.between}>
-        <AppText variant="label">{t.bookDetail.ratingLabel}</AppText>
-        {book.rating ? (
-          <StarRating value={book.rating} />
-        ) : (
-          <AppText variant="caption">{t.bookDetail.noRating}</AppText>
-        )}
-      </View>
-
-      <View style={styles.gapSm}>
-        <AppText variant="label">{t.bookDetail.notesLabel}</AppText>
-        {book.notes ? (
-          <AppText
-            variant="italicNote"
-            color="textPrimary"
-            style={[styles.note, { borderBottomColor: colors.border }]}
-          >
-            {book.notes}
-          </AppText>
-        ) : (
-          <AppText variant="caption">{t.bookDetail.noNotes}</AppText>
-        )}
-      </View>
-
-      <MoreFromShelf book={book} books={related} />
-
-      <View style={styles.footer}>
-        <Button variant="ghost" icon="pencil" label={t.bookDetail.edit} onPress={openEdit} />
-        <Button
-          variant="ghostDanger"
-          icon="trash"
-          label={t.bookDetail.delete}
-          onPress={() => setConfirmDelete(true)}
-        />
-      </View>
-
-      {sheet === 'options' ? (
-        <BottomSheet visible onClose={() => setSheet('none')} title={t.bookDetail.sheetTitle}>
-          <View style={styles.sheetItems}>
-            <Button
-              variant="ghost"
-              icon="pencil"
-              label={t.bookDetail.edit}
-              onPress={() => {
-                setSheet('none');
-                openEdit();
-              }}
-            />
-            <Button
-              variant="ghost"
-              icon="book"
-              label={lent ? t.bookDetail.markReturned : t.bookDetail.markLent}
-              onPress={lent ? returnBook : () => setSheet('loan')}
-            />
+            {book.author ? (
+              <AppText variant="body" color="textSecondary" numberOfLines={2}>
+                {book.author}
+              </AppText>
+            ) : null}
           </View>
-        </BottomSheet>
-      ) : null}
+        </View>
 
-      {sheet === 'loan' ? <LoanSheet book={book} onClose={() => setSheet('none')} /> : null}
+        <StatusCard book={book} onChangeStatus={requestStatus} />
+        {lent ? <LoanCard book={book} /> : null}
+        {book.readingStatus === 'reading' ? (
+          <ProgressCard book={book} onUpdate={() => setSheet('page')} ribbonFrom={ribbonFrom} />
+        ) : null}
 
-      <ConfirmDialog
-        visible={confirmDelete}
-        destructive
-        title={t.bookDetail.deleteTitle}
-        message={format(t.bookDetail.deleteMessage, { title: book.title })}
-        confirmLabel={deleting ? t.common.loading : t.bookDetail.deleteConfirm}
-        cancelLabel={t.bookDetail.cancel}
-        onCancel={() => setConfirmDelete(false)}
-        onConfirm={remove}
-      />
+        {/* Rating only exists for finished books. */}
+        {book.readingStatus === 'finished' ? (
+          <View style={styles.between}>
+            <AppText variant="label">{t.bookDetail.ratingLabel}</AppText>
+            <StarRating value={book.rating} onChange={rate} clearHint={t.reading.ratingClearHint} />
+          </View>
+        ) : null}
+
+        <NotesBlock book={book} />
+
+        <MoreFromShelf book={book} books={related} />
+
+        <View style={styles.footer}>
+          <Button variant="ghost" icon="pencil" label={t.bookDetail.edit} onPress={openEdit} />
+          <Button
+            variant="ghostDanger"
+            icon="trash"
+            label={t.bookDetail.delete}
+            onPress={() => setConfirmDelete(true)}
+          />
+        </View>
+
+        {sheet === 'options' ? (
+          <BottomSheet visible onClose={() => setSheet('none')} title={t.bookDetail.sheetTitle}>
+            <View style={styles.sheetItems}>
+              <Button
+                variant="ghost"
+                icon="pencil"
+                label={t.bookDetail.edit}
+                onPress={() => {
+                  setSheet('none');
+                  openEdit();
+                }}
+              />
+              <Button
+                variant="ghost"
+                icon="book"
+                label={lent ? t.bookDetail.markReturned : t.bookDetail.markLent}
+                onPress={lent ? returnBook : () => setSheet('loan')}
+              />
+              <Button
+                variant="ghost"
+                icon="sparkles"
+                label={t.bookDetail.findSimilar}
+                onPress={() => {
+                  setSheet('none');
+                  router.navigate({
+                    pathname: '/librarian',
+                    params: { mode: 'discovery', seed: book.id },
+                  });
+                }}
+              />
+            </View>
+          </BottomSheet>
+        ) : null}
+
+        {sheet === 'loan' ? <LoanSheet book={book} onClose={() => setSheet('none')} /> : null}
+        {sheet === 'page' ? <UpdatePageSheet book={book} onClose={() => setSheet('none')} /> : null}
+
+        <ConfirmDialog
+          visible={pendingStatus !== null}
+          title={t.reading.leaveFinishedTitle}
+          message={format(
+            book.rating ? t.reading.leaveFinishedMessageWithRating : t.reading.leaveFinishedMessage,
+            {
+              status: pendingStatus ? t.readingStatus[pendingStatus] : '',
+            },
+          )}
+          confirmLabel={t.reading.leaveFinishedConfirm}
+          cancelLabel={t.reading.cancel}
+          onCancel={() => setPendingStatus(null)}
+          onConfirm={() => {
+            if (pendingStatus) changeStatus(pendingStatus);
+          }}
+        />
+
+        <ConfirmDialog
+          visible={confirmDelete}
+          destructive
+          title={t.bookDetail.deleteTitle}
+          message={format(t.bookDetail.deleteMessage, { title: book.title })}
+          confirmLabel={deleting ? t.common.loading : t.bookDetail.deleteConfirm}
+          cancelLabel={t.bookDetail.cancel}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={remove}
+        />
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
@@ -479,4 +668,9 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xl, flexWrap: 'wrap' },
   sheetItems: { alignItems: 'flex-start' },
   notFound: { gap: spacing.sm, paddingTop: spacing.xxl },
+  statusSelector: { marginTop: spacing.sm },
+  noPadding: { padding: 0 },
+  notesTap: { minHeight: sizes.minTouchTarget, justifyContent: 'center' },
+  notesEmpty: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  notesActions: { flexDirection: 'row', gap: spacing.sm },
 });
