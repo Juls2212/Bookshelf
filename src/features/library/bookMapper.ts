@@ -1,35 +1,43 @@
 // snake_case rows <-> camelCase `Book`. Null-safe and free of I/O.
+import { INPUT_LIMITS } from '@/lib/inputLimits';
+import { cleanLine, cleanMultiline, truncateChars } from '@/lib/inputSanitizers';
 import type { Book } from '@/types/book';
 import type { UserBookInsert, UserBookRow, UserBookUpdate } from '@/types/database';
 
 import type { BookPatch, NewBook } from './bookRepository';
 
-/** Columns read by the app (excludes user_id and deleted_at). */
-export const BOOK_COLUMNS =
-  'id, title, author, genre, page_count, cover_path, cover_source, reading_status, current_page, rating, notes, lent_to, lent_at, status_changed_at, created_at, updated_at';
-
 export type BookRowSelection = Omit<UserBookRow, 'user_id' | 'deleted_at'>;
 
-/** Trims optional text; blank becomes null. */
+/** Single-line optional text, cleaned as saved; blank becomes null. */
 function cleanText(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  const cleaned = cleanLine(value ?? '');
+  return cleaned ? cleaned : null;
 }
+
+/** Notes keep their line breaks; blank becomes null. */
+function cleanNotes(value: string | null | undefined): string | null {
+  const cleaned = cleanMultiline(value ?? '');
+  return cleaned ? cleaned : null;
+}
+
+/** Display copy of stored text: rows over the limits (legacy or pulled) never reach the UI. */
+const shown = (value: string | null | undefined, max: number): string | null =>
+  value == null ? null : truncateChars(value, max);
 
 export function rowToBook(row: BookRowSelection): Book {
   return {
     id: row.id,
-    title: row.title,
-    author: row.author ?? null,
-    genre: row.genre ?? null,
+    title: truncateChars(row.title, INPUT_LIMITS.title),
+    author: shown(row.author, INPUT_LIMITS.author),
+    genre: shown(row.genre, INPUT_LIMITS.genre),
     pageCount: row.page_count ?? null,
     coverPath: row.cover_path ?? null,
     coverSource: row.cover_source ?? null,
     readingStatus: row.reading_status,
     currentPage: row.current_page ?? 0,
     rating: row.rating ?? null,
-    notes: row.notes ?? null,
-    lentTo: row.lent_to ?? null,
+    notes: shown(row.notes, INPUT_LIMITS.notes),
+    lentTo: shown(row.lent_to, INPUT_LIMITS.lentTo),
     lentAt: row.lent_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -41,7 +49,7 @@ export function rowToBook(row: BookRowSelection): Book {
 export function newBookToInsert(input: NewBook & { id: string }, nowIso: string): UserBookInsert {
   return {
     id: input.id,
-    title: input.title.trim(),
+    title: cleanLine(input.title),
     author: cleanText(input.author),
     genre: cleanText(input.genre),
     page_count: input.pageCount ?? null,
@@ -50,7 +58,7 @@ export function newBookToInsert(input: NewBook & { id: string }, nowIso: string)
     reading_status: input.readingStatus ?? 'to_read',
     current_page: input.currentPage ?? 0,
     rating: input.rating ?? null,
-    notes: cleanText(input.notes),
+    notes: cleanNotes(input.notes),
     status_changed_at: nowIso,
   };
 }
@@ -58,7 +66,7 @@ export function newBookToInsert(input: NewBook & { id: string }, nowIso: string)
 /** Update payload with only the keys present in the patch. */
 export function patchToUpdate(patch: BookPatch): UserBookUpdate {
   const update: UserBookUpdate = {};
-  if (patch.title !== undefined) update.title = patch.title.trim();
+  if (patch.title !== undefined) update.title = cleanLine(patch.title);
   if (patch.author !== undefined) update.author = cleanText(patch.author);
   if (patch.genre !== undefined) update.genre = cleanText(patch.genre);
   if (patch.pageCount !== undefined) update.page_count = patch.pageCount;
@@ -67,6 +75,6 @@ export function patchToUpdate(patch: BookPatch): UserBookUpdate {
   if (patch.readingStatus !== undefined) update.reading_status = patch.readingStatus;
   if (patch.currentPage !== undefined) update.current_page = patch.currentPage ?? 0;
   if (patch.rating !== undefined) update.rating = patch.rating;
-  if (patch.notes !== undefined) update.notes = cleanText(patch.notes);
+  if (patch.notes !== undefined) update.notes = cleanNotes(patch.notes);
   return update;
 }
