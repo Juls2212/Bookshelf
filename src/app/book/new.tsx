@@ -1,50 +1,33 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { Screen } from '@/components/Screen';
-import { useToast } from '@/components/Toast';
 import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { sizes, spacing } from '@/design/tokens';
-import { addBook } from '@/features/library/addBook';
-import { BookForm, type BookFormSubmitResult } from '@/features/library/BookForm';
-import { toNewBook, type BookFormValues } from '@/features/library/bookFormLogic';
-import { bookErrorMessage } from '@/features/library/bookRepository';
-import type { LocalImage } from '@/features/library/coverService';
+import { BookForm } from '@/features/library/BookForm';
+import { useCreateBook } from '@/features/library/useCreateBook';
+import {
+  formValuesFromParams,
+  type SuggestionParams,
+} from '@/features/recommendations/addFromSuggestion';
 import { t } from '@/i18n';
-import { useAuthStore } from '@/stores/authStore';
-import { useLibraryStore } from '@/stores/libraryStore';
+import { useRecommendationsStore } from '@/stores/recommendationsStore';
 
 const PADDING = spacing.lg + spacing.xs;
 
 export default function NewBookScreen() {
   const router = useRouter();
-  const toast = useToast();
   const { colors } = useTheme();
-  const userId = useAuthStore((state) => state.user?.id ?? null);
-
-  const submit = async (
-    values: BookFormValues,
-    cover: LocalImage | null,
-  ): Promise<BookFormSubmitResult> => {
-    if (!userId) return { ok: false, message: bookErrorMessage('unauthorized') };
-    const result = await addBook(
-      { userId, input: toNewBook(values), cover },
-      { create: useLibraryStore.getState().create },
-    );
-    if (!result.ok) {
-      return {
-        ok: false,
-        message:
-          result.error === 'cover_failed' ? t.bookForm.coverFailed : bookErrorMessage(result.error),
-      };
-    }
-    toast.show(t.bookForm.saved, 'success');
-    router.navigate({ pathname: '/library', params: { added: result.data.id } });
-    return { ok: true };
-  };
+  // A "Nuevas aventuras" suggestion opens the form prefilled; everything stays editable.
+  const prefill = formValuesFromParams(useLocalSearchParams<SuggestionParams>());
+  const submit = useCreateBook({
+    onSaved: () => {
+      if (prefill) void useRecommendationsStore.getState().markAdded(prefill.suggestionId);
+    },
+  });
 
   return (
     <Screen edges={['top', 'left', 'right']} contentStyle={styles.screen}>
@@ -68,10 +51,15 @@ export default function NewBookScreen() {
             {t.bookForm.heading}
           </AppText>
           <AppText variant="body" color="textSecondary">
-            {t.bookForm.subtitle}
+            {prefill ? t.bookForm.fromSuggestion : t.bookForm.subtitle}
           </AppText>
         </View>
-        <BookForm onSubmit={submit} onCancel={() => router.back()} />
+        <BookForm
+          allowSuggestions
+          initialValues={prefill?.values}
+          onSubmit={submit}
+          onCancel={() => router.back()}
+        />
       </KeyboardAwareScrollView>
     </Screen>
   );
