@@ -10,3 +10,4 @@ expo-env.d.ts
 .vscode/
 assets/
 CLAUDE.md
+supabase/.temp/
