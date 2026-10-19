@@ -9,7 +9,7 @@ import { AppText } from './AppText';
 import { Button } from './Button';
 import { ShelfLine } from './ShelfLine';
 
-export type EmptyStateAction = { label: string; onPress?: () => void; icon?: IconName };
+type EmptyStateAction = { label: string; onPress?: () => void; icon?: IconName };
 
 type Props = {
   eyebrow?: string;
