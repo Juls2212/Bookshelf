@@ -10,6 +10,11 @@ module.exports = defineConfig([
     ignores: ['dist/*', '.expo/*', 'coverage/*', 'node_modules/*'],
   },
   {
+    // Deno entry points of Edge Functions: npm: imports and Deno globals (deployed with the
+    // Supabase CLI). Their pure logic in supabase/functions/_shared is linted.
+    ignores: ['supabase/functions/*/index.ts'],
+  },
+  {
     settings: {
       // Resolve the `@/` alias from tsconfig paths.
       'import/resolver': {
