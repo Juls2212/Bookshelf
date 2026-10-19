@@ -2,10 +2,15 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Shared Edge Function logic imports its siblings with .ts extensions, as Deno requires.
+    "allowImportingTsExtensions": true,
     "types": ["jest"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  // Deno entry points of Edge Functions (Deno globals, npm: imports). Their pure logic in
+  // supabase/functions/_shared stays type-checked and tested here.
+  "exclude": ["node_modules", "supabase/functions/*/index.ts"]
 }
