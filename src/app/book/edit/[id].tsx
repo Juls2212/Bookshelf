@@ -32,11 +32,12 @@ export default function EditBookScreen() {
   const submit = async (
     values: BookFormValues,
     cover: LocalImage | null,
+    options?: { removeCover: true },
   ): Promise<BookFormSubmitResult> => {
     if (!book) return { ok: false, message: bookErrorMessage('not_found') };
     if (!userId) return { ok: false, message: bookErrorMessage('unauthorized') };
     const result = await editBook(
-      { userId, book, patch: toNewBook(values), cover },
+      { userId, book, patch: toNewBook(values), cover, removeCover: options?.removeCover ?? false },
       { update: useLibraryStore.getState().update },
     );
     if (!result.ok) {
@@ -79,6 +80,7 @@ export default function EditBookScreen() {
                 ? { uri: covered?.coverUri ?? null, cacheKey: covered?.coverCacheKey }
                 : null
             }
+            editing
             submitLabel={t.bookForm.editSave}
             onSubmit={submit}
             onCancel={() => router.back()}
