@@ -9,13 +9,13 @@ import { t } from '@/i18n';
 
 import { AppText } from './AppText';
 
-export type ToastKind = 'success' | 'error' | 'info';
+type ToastKind = 'success' | 'error' | 'info';
 
 type ToastState = { id: number; kind: ToastKind; message: string };
 
 type ToastApi = { show: (message: string, kind?: ToastKind) => void };
 
-export const TOAST_DURATION_MS = 3500;
+const TOAST_DURATION_MS = 3500;
 /** Keeps the toast above the tab bar and its raised Scan button. */
 const BOTTOM_OFFSET = sizes.tabBarHeight + spacing.xxl;
 
