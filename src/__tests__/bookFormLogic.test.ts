@@ -6,7 +6,7 @@ import {
   validateBookForm,
   type BookFormValues,
 } from '@/features/library/bookFormLogic';
-import { currentReading, libraryCountLabel, recentBooks } from '@/features/library/libraryCopy';
+import { libraryCountLabel, recentBooks } from '@/features/library/libraryCopy';
 import { t } from '@/i18n';
 import type { Book } from '@/types/book';
 
@@ -19,6 +19,7 @@ jest.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: {
 const form = (overrides: Partial<BookFormValues>): BookFormValues => ({
   ...emptyBookForm,
   title: 'Los almendros',
+  pages: '264',
   ...overrides,
 });
 
@@ -28,7 +29,14 @@ describe('book form logic', () => {
   });
 
   it('requires a title and validates pages, current page and rating', () => {
-    expect(validateBookForm(emptyBookForm)).toEqual({ title: 'title_required' });
+    expect(validateBookForm(emptyBookForm)).toEqual({
+      title: 'title_required',
+      pages: 'page_count_required',
+    });
+    expect(validateBookForm(form({}))).toEqual({});
+    expect(validateBookForm(form({ pages: '' }))).toEqual({ pages: 'page_count_required' });
+    expect(validateBookForm(form({ pages: '10001' }))).toEqual({ pages: 'page_count_invalid' });
+    expect(validateBookForm(form({ pages: '10000' }))).toEqual({});
     expect(validateBookForm(form({ pages: '0' }))).toEqual({ pages: 'page_count_invalid' });
     expect(
       validateBookForm(form({ pages: '100', readingStatus: 'reading', currentPage: '120' })),
@@ -60,16 +68,24 @@ describe('book form logic', () => {
       pageCount: 312,
       readingStatus: 'reading',
       currentPage: 214,
-      rating: 4,
+      rating: null,
       notes: null,
     });
   });
 
   it('derives the current page from the status', () => {
     expect(toNewBook(form({ pages: '200', readingStatus: 'finished' })).currentPage).toBe(200);
-    expect(toNewBook(form({ readingStatus: 'finished' })).currentPage).toBe(0);
+    // Null-safe with an unknown total (books saved before the page count was required).
+    expect(toNewBook(form({ pages: '', readingStatus: 'finished' })).currentPage).toBe(0);
     expect(toNewBook(form({ readingStatus: 'to_read', currentPage: '50' })).currentPage).toBe(0);
-    expect(toNewBook(form({ readingStatus: 'reading', currentPage: '' })).currentPage).toBe(0);
+    expect(
+      toNewBook(form({ pages: '', readingStatus: 'reading', currentPage: '' })).currentPage,
+    ).toBe(0);
+    // Reading rules: page 1 when the total is known; the last page finishes the book.
+    expect(toNewBook(form({ pages: '200', readingStatus: 'reading' })).currentPage).toBe(1);
+    expect(
+      toNewBook(form({ pages: '200', readingStatus: 'reading', currentPage: '200' })),
+    ).toMatchObject({ readingStatus: 'finished', currentPage: 200 });
   });
 });
 
@@ -83,8 +99,14 @@ describe('addBook', () => {
         ok: true as const,
         data: { uri: 'file:///prepared.jpg', width: 900, height: 1200 },
       })),
-      upload: jest.fn(async () => ({ ok: true as const, data: 'user-1/uuid-1.jpg' })),
-      remove: jest.fn(async () => ({ ok: true as const, data: null })),
+      saveLocal: jest.fn(async (userId: string, bookId: string) => ({
+        ok: true as const,
+        data: {
+          localUri: `file:///documents/covers/${userId}/${bookId}.jpg`,
+          path: `${userId}/${bookId}.jpg`,
+        },
+      })),
+      removeLocal: jest.fn(),
     };
   }
 
@@ -92,7 +114,7 @@ describe('addBook', () => {
     const create = jest.fn(async () => ({ ok: true as const, data: book }));
     const c = covers();
     await addBook({ userId: 'user-1', input: { title: 'X' }, cover: null }, { create, covers: c });
-    expect(c.upload).not.toHaveBeenCalled();
+    expect(c.saveLocal).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({
       title: 'X',
       id: 'uuid-1',
@@ -101,7 +123,7 @@ describe('addBook', () => {
     });
   });
 
-  it('uploads the prepared cover with the pre-generated id before creating the row', async () => {
+  it('saves the prepared cover locally with the pre-generated id (no upload)', async () => {
     const create = jest.fn(async () => ({ ok: true as const, data: book }));
     const c = covers();
     const result = await addBook(
@@ -109,49 +131,41 @@ describe('addBook', () => {
       { create, covers: c, newId: () => 'uuid-1' },
     );
     expect(c.prepare).toHaveBeenCalledWith(cover);
-    expect(c.upload).toHaveBeenCalledWith('user-1', 'uuid-1', 'file:///prepared.jpg');
+    expect(c.saveLocal).toHaveBeenCalledWith('user-1', 'uuid-1', 'file:///prepared.jpg');
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'uuid-1',
         coverPath: 'user-1/uuid-1.jpg',
         coverSource: 'gallery',
+        localCoverUri: 'file:///documents/covers/user-1/uuid-1.jpg',
       }),
     );
     expect(result).toEqual({ ok: true, data: book });
   });
 
-  it('removes the uploaded cover when the row insert fails', async () => {
-    const create = jest.fn(async () => ({ ok: false as const, error: 'network_error' as const }));
+  it('removes the local copy when the row cannot be created', async () => {
+    const create = jest.fn(async () => ({ ok: false as const, error: 'unknown' as const }));
     const c = covers();
     const result = await addBook(
       { userId: 'user-1', input: { title: 'X' }, cover },
       { create, covers: c },
     );
-    expect(c.remove).toHaveBeenCalledWith('user-1/uuid-1.jpg');
-    expect(result).toEqual({ ok: false, error: 'network_error' });
+    expect(c.removeLocal).toHaveBeenCalledWith('file:///documents/covers/user-1/uuid-1.jpg');
+    expect(result).toEqual({ ok: false, error: 'unknown' });
   });
 
-  it('reports an empty or invalid upload as a cover failure', async () => {
+  it('reports a cover that cannot be prepared or saved as a cover failure', async () => {
     const create = jest.fn();
     const c = covers();
-    c.upload.mockResolvedValueOnce({ ok: false, error: 'unknown' } as never);
-    const result = await addBook(
-      { userId: 'user-1', input: { title: 'X' }, cover },
-      { create, covers: c },
-    );
-    expect(result).toEqual({ ok: false, error: 'cover_failed' });
-    expect(create).not.toHaveBeenCalled();
-  });
+    c.saveLocal.mockResolvedValueOnce({ ok: false, error: 'unknown' } as never);
+    await expect(
+      addBook({ userId: 'user-1', input: { title: 'X' }, cover }, { create, covers: c }),
+    ).resolves.toEqual({ ok: false, error: 'cover_failed' });
 
-  it('stops before creating when the cover cannot be uploaded', async () => {
-    const create = jest.fn();
-    const c = covers();
-    c.upload.mockResolvedValueOnce({ ok: false, error: 'unauthorized' } as never);
-    const result = await addBook(
-      { userId: 'user-1', input: { title: 'X' }, cover },
-      { create, covers: c },
-    );
-    expect(result).toEqual({ ok: false, error: 'cover_failed' });
+    c.prepare.mockResolvedValueOnce({ ok: false, error: 'unknown' } as never);
+    await expect(
+      addBook({ userId: 'user-1', input: { title: 'X' }, cover }, { create, covers: c }),
+    ).resolves.toEqual({ ok: false, error: 'cover_failed' });
     expect(create).not.toHaveBeenCalled();
   });
 });
@@ -165,16 +179,6 @@ describe('library copy', () => {
   });
 
   const b = (id: string, overrides: Partial<Book>) => ({ id, ...overrides }) as Book;
-
-  it('picks the most recently updated book being read', () => {
-    const books = [
-      b('a', { readingStatus: 'reading', updatedAt: '2026-10-01' }),
-      b('b', { readingStatus: 'reading', updatedAt: '2026-10-05' }),
-      b('c', { readingStatus: 'finished', updatedAt: '2026-10-09' }),
-    ];
-    expect(currentReading(books)?.id).toBe('b');
-    expect(currentReading([books[2]])).toBeNull();
-  });
 
   it('lists the most recently added books, excluding one', () => {
     const books = [
