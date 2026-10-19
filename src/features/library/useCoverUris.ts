@@ -4,22 +4,28 @@ import type { Book } from '@/types/book';
 
 import { coverService } from './coverService';
 
-type CoverFields = Pick<Book, 'coverPath' | 'updatedAt'>;
+type CoverFields = Pick<Book, 'coverPath' | 'updatedAt'> & { localCoverUri?: string | null };
 
 export type WithCover<T> = T & { coverUri?: string | null; coverCacheKey?: string | null };
 
 /** Stable image cache key: changes only when the cover (or the book) changes. */
-export function coverCacheKeyFor(book: CoverFields): string | null {
+function coverCacheKeyFor(book: CoverFields): string | null {
+  if (book.localCoverUri) return `${book.localCoverUri}@${book.updatedAt}`;
   return book.coverPath ? `${book.coverPath}@${book.updatedAt}` : null;
 }
 
 /**
- * Resolves signed cover URLs for the books currently shown, in one batch request.
- * Books without a cover are returned unchanged (typographic fallback).
+ * Cover URIs for the books on screen: the local copy when this device has one, otherwise a
+ * signed URL (one batch request) for covers that only exist on the server. Books without a
+ * cover keep the typographic fallback.
  */
 export function useCoverUris<T extends CoverFields>(books: readonly T[]): WithCover<T>[] {
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const pathsKey = [...new Set(books.map((b) => b.coverPath).filter(Boolean))].sort().join('\n');
+  const pathsKey = [
+    ...new Set(books.filter((b) => !b.localCoverUri && b.coverPath).map((b) => b.coverPath)),
+  ]
+    .sort()
+    .join('\n');
 
   useEffect(() => {
     if (!pathsKey) return;
@@ -32,9 +38,17 @@ export function useCoverUris<T extends CoverFields>(books: readonly T[]): WithCo
     };
   }, [pathsKey]);
 
-  return books.map((book) =>
-    book.coverPath
-      ? { ...book, coverUri: urls[book.coverPath] ?? null, coverCacheKey: coverCacheKeyFor(book) }
-      : book,
-  );
+  return books.map((book) => {
+    if (book.localCoverUri) {
+      return { ...book, coverUri: book.localCoverUri, coverCacheKey: coverCacheKeyFor(book) };
+    }
+    if (book.coverPath) {
+      return {
+        ...book,
+        coverUri: urls[book.coverPath] ?? null,
+        coverCacheKey: coverCacheKeyFor(book),
+      };
+    }
+    return book;
+  });
 }
