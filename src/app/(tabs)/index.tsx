@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
@@ -14,14 +14,26 @@ import { coverHeightFactorFor } from '@/design/coverColor';
 import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { fonts, radii, sizes, spacing } from '@/design/tokens';
-import { currentReading, recentBooks } from '@/features/library/libraryCopy';
+import { FirstRunOffline } from '@/features/library/FirstRunOffline';
+import { recentBooks } from '@/features/library/libraryCopy';
+import { ReadingStatsCard } from '@/features/library/ReadingStatsCard';
+import { getProgressPercent } from '@/features/library/readingRules';
+import { pickCurrentlyReading } from '@/features/library/readingSelectors';
+import { UpdatePageSheet } from '@/features/library/UpdatePageSheet';
 import { useCoverUris, type WithCover } from '@/features/library/useCoverUris';
+import { useDailyPages, useLocalNow } from '@/features/library/useReadingStatsData';
 import { firstNameOf, useDisplayName } from '@/features/profile/displayName';
+import { ProfileAvatar } from '@/features/profile/ProfileAvatar';
+import { useFirstRun } from '@/features/sync/useFirstRun';
 import { format, t } from '@/i18n';
-import { computeProgressPercent } from '@/lib/book';
 import { buildGreeting, formatLongDate } from '@/lib/dates';
 import { useLibraryStore } from '@/stores/libraryStore';
+import { useRecommendationsStore } from '@/stores/recommendationsStore';
+import { useSyncStore } from '@/stores/syncStore';
 import type { Book } from '@/types/book';
+
+/** Heading (26 lineHeight) still fits the 52 px circle at this scale. */
+const MONOGRAM_MAX_SCALE = 1.8;
 
 function Header() {
   const router = useRouter();
@@ -52,11 +64,19 @@ function Header() {
         accessibilityLabel={t.home.profileA11y}
         style={[styles.avatar, { borderColor: colors.textPrimary }]}
       >
-        {name ? (
-          <AppText variant="heading">{name.charAt(0).toLocaleUpperCase()}</AppText>
-        ) : (
-          <Icon name="user" />
-        )}
+        <ProfileAvatar
+          fallback={
+            name ? (
+              // Decorative monogram in a fixed circle: capped so large text sizes do not clip it
+              // (the button already has its own label).
+              <AppText variant="heading" maxFontSizeMultiplier={MONOGRAM_MAX_SCALE}>
+                {name.charAt(0).toLocaleUpperCase()}
+              </AppText>
+            ) : (
+              <Icon name="user" />
+            )
+          }
+        />
       </Pressable>
     </View>
   );
@@ -72,7 +92,7 @@ function ReadingProgress({ book }: { book: Book }) {
       </AppText>
     );
   }
-  const percent = computeProgressPercent(page, book.pageCount);
+  const percent = getProgressPercent(book) ?? 0;
   return (
     <View style={styles.gapXs}>
       <ProgressBar percent={percent} />
@@ -91,11 +111,17 @@ function ReadingProgress({ book }: { book: Book }) {
 function ReadingCard({ book }: { book: WithCover<Book> }) {
   const router = useRouter();
   const { colors } = useTheme();
+  const [pageSheet, setPageSheet] = useState(false);
   const open = () => router.push({ pathname: '/book/[id]', params: { id: book.id } });
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <AppText variant="label">{t.home.readingLabel}</AppText>
-      <View style={styles.readingRow}>
+      <Pressable
+        onPress={open}
+        accessibilityRole="button"
+        accessibilityLabel={format(t.home.openBookA11y, { title: book.title })}
+        style={({ pressed }) => [styles.readingRow, pressed && styles.pressed]}
+      >
         <BookCover
           title={book.title}
           author={book.author}
@@ -116,15 +142,16 @@ function ReadingCard({ book }: { book: WithCover<Book> }) {
           </View>
           <ReadingProgress book={book} />
         </View>
-      </View>
+      </Pressable>
       <View style={styles.actions}>
         <View style={styles.flex}>
           <Button label={t.home.continueReading} onPress={open} />
         </View>
         <View style={styles.flex}>
-          <Button variant="secondary" label={t.home.myPage} onPress={open} />
+          <Button variant="secondary" label={t.home.myPage} onPress={() => setPageSheet(true)} />
         </View>
       </View>
+      {pageSheet ? <UpdatePageSheet book={book} onClose={() => setPageSheet(false)} /> : null}
     </View>
   );
 }
@@ -141,29 +168,48 @@ function NoReadingCard() {
       </AppText>
       <Button
         variant="secondary"
-        icon="sparkles"
+        icon="library"
         label={t.home.noReadingAction}
-        onPress={() => router.navigate('/librarian')}
+        onPress={() => router.navigate('/library')}
       />
     </View>
   );
 }
 
-// The saved-recommendation card returns in Phase 7; until then Inicio shows this state.
-function NoRecommendationCard() {
+/**
+ * "Tu librero te espera": the last recommendation (cached, also offline) when its book is still
+ * on the shelf, otherwise an invitation. Both go to the Librero.
+ */
+function LibrarianCard({ books }: { books: readonly Book[] }) {
   const router = useRouter();
   const { colors } = useTheme();
+  const current = useRecommendationsStore((state) => state.current);
+  const book = current ? books.find((b) => b.id === current.bookId) : undefined;
   return (
-    <View style={[styles.card, { borderColor: colors.border, borderWidth: sizes.borderWidth }]}>
+    <View
+      style={[styles.card, { borderColor: colors.border, borderWidth: sizes.borderWidth }]}
+      testID="home-librarian-card"
+    >
       <AppText variant="label">{t.home.recommendationLabel}</AppText>
-      <AppText variant="heading">{t.home.noRecommendationTitle}</AppText>
-      <AppText variant="body" color="textSecondary">
-        {t.home.noRecommendationText}
-      </AppText>
+      {current && book ? (
+        <>
+          <AppText variant="heading">{book.title}</AppText>
+          <AppText variant="body" color="textSecondary" numberOfLines={3}>
+            {current.rationale}
+          </AppText>
+        </>
+      ) : (
+        <>
+          <AppText variant="heading">{t.home.noRecommendationTitle}</AppText>
+          <AppText variant="body" color="textSecondary">
+            {t.home.noRecommendationText}
+          </AppText>
+        </>
+      )}
       <Button
         variant="secondary"
         icon="sparkles"
-        label={t.home.noRecommendationAction}
+        label={current && book ? t.home.recommendationAction : t.home.noRecommendationAction}
         onPress={() => router.navigate('/librarian')}
       />
     </View>
@@ -243,7 +289,13 @@ function EmptyLibrary() {
   );
 }
 
-function LoadErrorCard({ offline }: { offline: boolean }) {
+function LoadErrorCard({
+  offline,
+  onRetry = () => void useLibraryStore.getState().load(),
+}: {
+  offline: boolean;
+  onRetry?: () => void;
+}) {
   const { colors } = useTheme();
   return (
     <View style={[styles.card, { borderColor: colors.border, borderWidth: sizes.borderWidth }]}>
@@ -251,12 +303,7 @@ function LoadErrorCard({ offline }: { offline: boolean }) {
       <AppText variant="body" color="textSecondary">
         {offline ? t.library.errorOffline : t.library.errorGeneric}
       </AppText>
-      <Button
-        variant="secondary"
-        icon="refresh"
-        label={t.library.retry}
-        onPress={() => useLibraryStore.getState().load()}
-      />
+      <Button variant="secondary" icon="refresh" label={t.library.retry} onPress={onRetry} />
     </View>
   );
 }
@@ -267,6 +314,9 @@ export default function HomeScreen() {
   const books = useLibraryStore((state) => state.books);
   const status = useLibraryStore((state) => state.status);
   const errorCode = useLibraryStore((state) => state.errorCode);
+  // Reading log per day (reloaded on every library change) and a clock that follows midnight.
+  const dailyPages = useDailyPages(books);
+  const now = useLocalNow();
 
   useEffect(() => {
     const store = useLibraryStore.getState();
@@ -274,14 +324,18 @@ export default function HomeScreen() {
     else store.refresh();
   }, []);
 
-  const reading = currentReading(books);
+  const reading = pickCurrentlyReading(books);
   const collection = recentBooks(books, COLLECTION_SIZE, reading?.id);
   // One batch of signed URLs for every cover on screen.
   const covered = useCoverUris(reading ? [reading, ...collection] : collection);
   const shownReading = reading ? covered[0] : null;
   const shownCollection = reading ? covered.slice(1) : covered;
 
-  const firstLoad = (status === 'idle' || status === 'loading') && books.length === 0;
+  const firstRun = useFirstRun(books.length > 0);
+  // The first-run states (offline, failed) take precedence over the store's loading state.
+  const firstLoad =
+    firstRun === 'loading' ||
+    (firstRun === null && (status === 'idle' || status === 'loading') && books.length === 0);
 
   return (
     <Screen scroll contentStyle={styles.content}>
@@ -290,14 +344,19 @@ export default function HomeScreen() {
       ) : (
         <>
           <Header />
-          {status === 'error' && books.length === 0 ? (
+          {firstRun === 'offline' ? (
+            <FirstRunOffline />
+          ) : firstRun === 'failed' ? (
+            <LoadErrorCard offline={false} onRetry={() => void useSyncStore.getState().syncNow()} />
+          ) : status === 'error' && books.length === 0 ? (
             <LoadErrorCard offline={errorCode === 'network_error'} />
           ) : books.length === 0 ? (
             <EmptyLibrary />
           ) : (
             <>
               {shownReading ? <ReadingCard book={shownReading} /> : <NoReadingCard />}
-              <NoRecommendationCard />
+              <ReadingStatsCard books={books} dailyPages={dailyPages} now={now} />
+              <LibrarianCard books={books} />
               {shownCollection.length > 0 ? <Collection books={shownCollection} /> : null}
             </>
           )}
@@ -322,6 +381,7 @@ const styles = StyleSheet.create({
     borderWidth: sizes.borderWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   card: { borderRadius: radii.surface, padding: spacing.lg + spacing.xs, gap: spacing.lg },
   readingRow: { flexDirection: 'row', gap: spacing.lg },
@@ -329,6 +389,7 @@ const styles = StyleSheet.create({
   author: { fontSize: 15 },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bold: { fontFamily: fonts.sansBold },
+  pressed: { opacity: 0.85 },
   actions: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
   gapXs: { gap: spacing.xs },
