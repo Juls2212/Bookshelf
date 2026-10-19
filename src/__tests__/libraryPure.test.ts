@@ -7,6 +7,7 @@ import {
 import {
   bookValidationMessage,
   validateBook,
+  validatePageCount,
   validateLentTo,
   type BookValidationCode,
 } from '@/features/library/bookValidation';
@@ -94,7 +95,21 @@ describe('bookMapper', () => {
 describe('bookValidation', () => {
   it('accepts a valid book', () => {
     expect(validateBook({ title: 'A', pageCount: 100, currentPage: 100, rating: 5 })).toEqual([]);
-    expect(validateBook({ title: 'A' })).toEqual([]);
+    expect(validateBook({ title: 'A', pageCount: 1 })).toEqual([]);
+    expect(validateBook({ title: 'A', pageCount: 10_000 })).toEqual([]);
+  });
+
+  it('requires a page count from 1 to 10000', () => {
+    expect(validateBook({ title: 'A' })).toEqual(['page_count_required']);
+    expect(validateBook({ title: 'A', pageCount: null })).toEqual(['page_count_required']);
+    expect(validateBook({ title: 'A', pageCount: Number.NaN })).toEqual(['page_count_required']);
+    expect(validateBook({ title: 'A', pageCount: 10_001 })).toEqual(['page_count_invalid']);
+    expect(validatePageCount(0)).toBe('page_count_invalid');
+    expect(validatePageCount(264)).toBeNull();
+    // Updates that do not touch the page count of an older book without one.
+    expect(validateBook({ title: 'A', pageCount: null, requirePageCount: false })).toEqual([]);
+    expect(validatePageCount(null, { required: false })).toBeNull();
+    expect(validatePageCount(0, { required: false })).toBe('page_count_invalid');
   });
 
   it('reports every issue', () => {
