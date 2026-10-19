@@ -6,8 +6,7 @@ import { radii, sizes, spacing, typeScale, type ColorToken } from '@/design/toke
 import { t } from '@/i18n';
 
 /** `ghost` / `ghostDanger`: plain icon + text actions without a box (e.g. "Eliminar libro"). */
-export type ButtonVariant =
-  'primary' | 'secondary' | 'destructive' | 'link' | 'ghost' | 'ghostDanger';
+type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'link' | 'ghost' | 'ghostDanger';
 
 type Props = {
   label: string;
@@ -16,6 +15,8 @@ type Props = {
   icon?: IconName;
   disabled?: boolean;
   loading?: boolean;
+  /** Defaults to `label`; for short labels that need context (e.g. "Usar"). */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
   testID?: string;
 };
@@ -38,6 +39,7 @@ export function Button({
   icon,
   disabled = false,
   loading = false,
+  accessibilityLabel,
   accessibilityHint,
   testID,
 }: Props) {
@@ -54,7 +56,7 @@ export function Button({
       onPress={onPress}
       disabled={inactive}
       accessibilityRole={isLink ? 'link' : 'button'}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ pressed }) => [
