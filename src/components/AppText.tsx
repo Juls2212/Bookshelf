@@ -3,8 +3,7 @@ import { Text, type TextProps } from 'react-native';
 import { useTheme } from '@/design/ThemeProvider';
 import { typeScale, type ColorToken } from '@/design/tokens';
 
-export type TextVariant =
-  'display' | 'title' | 'heading' | 'body' | 'label' | 'caption' | 'italicNote';
+type TextVariant = 'display' | 'title' | 'heading' | 'body' | 'label' | 'caption' | 'italicNote';
 
 const defaultColor: Record<TextVariant, ColorToken> = {
   display: 'textPrimary',
