@@ -1,4 +1,4 @@
-export type Env = {
+type Env = {
   supabaseUrl: string;
   supabasePublishableKey: string;
 };
