@@ -10,7 +10,7 @@ const light = {
   track: '#DCC8A6',
   textPrimary: '#2A1A12', // Tinta, never pure black
   textSecondary: '#67594F', // textPrimary at ~70% over background
-  textMuted: '#76604D',
+  textMuted: '#725D4B', // placeholders: >= 4.5:1 on field
   accent: '#B7773A', // Caramelo
   accentText: '#8A5224', // Caramelo oscuro
   actionPrimary: '#3B2418', // Espresso
@@ -18,7 +18,7 @@ const light = {
   focusBorder: '#B7773A',
   shelf: '#8C5A36', // Madera
   shelfEnd: '#8C5A36',
-  danger: '#A8492F', // Terracota
+  danger: '#A0452D', // Terracota (>= 4.5:1 on surface and field)
   dangerSoft: '#F8E8DF',
   success: '#466128',
   warning: '#835400',
