@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'rea
 import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { fonts, radii, sizes, spacing, type ColorToken } from '@/design/tokens';
-import { t } from '@/i18n';
+import { format, t } from '@/i18n';
 
 import { AppText } from './AppText';
 
@@ -14,6 +14,8 @@ type Props = Omit<TextInputProps, 'style' | 'placeholderTextColor'> & {
   errorText?: string;
   /** Marks a value that must be double-checked (e.g. filled by AI). */
   review?: boolean;
+  /** Marks the field as required (an asterisk, and "obligatorio" for screen readers). */
+  required?: boolean;
 };
 
 export function TextField({
@@ -21,6 +23,7 @@ export function TextField({
   helperText,
   errorText,
   review = false,
+  required = false,
   multiline = false,
   secureTextEntry = false,
   onFocus,
@@ -43,7 +46,14 @@ export function TextField({
 
   return (
     <View style={styles.container}>
-      <AppText variant="label">{label}</AppText>
+      <AppText variant="label">
+        {label}
+        {required ? (
+          <AppText variant="label" color="accentText">
+            {' *'}
+          </AppText>
+        ) : null}
+      </AppText>
       <View
         style={[
           styles.field,
@@ -56,7 +66,10 @@ export function TextField({
       >
         <TextInput
           {...inputProps}
-          accessibilityLabel={inputProps.accessibilityLabel ?? label}
+          accessibilityLabel={
+            inputProps.accessibilityLabel ??
+            (required ? format(t.common.requiredA11y, { label }) : label)
+          }
           accessibilityHint={message}
           multiline={multiline}
           secureTextEntry={secureTextEntry && hidden}
