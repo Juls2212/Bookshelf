@@ -1,5 +1,4 @@
 export { es as t } from './es';
-export type { Dictionary } from './es';
 
 /** Replaces `{name}` placeholders in a dictionary template. */
 export function format(template: string, values: Record<string, string | number>): string {
