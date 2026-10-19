@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   COVER_JPEG_QUALITY,
   COVER_MAX_HEIGHT,
+  CROP_PREVIEW_MAX_HEIGHT,
   SIGNED_URL_TTL_SECONDS,
   coverPathFor,
   coverResizeFor,
@@ -16,9 +17,13 @@ jest.mock('expo-file-system', () => ({ File: jest.fn() }));
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn() }));
 jest.mock('expo-image-manipulator', () => {
-  const context: { resize: jest.Mock; renderAsync: jest.Mock } = {
+  const context: { resize: jest.Mock; crop: jest.Mock; renderAsync: jest.Mock } = {
     resize: jest.fn((): unknown => context),
+    crop: jest.fn((): unknown => context),
+    // The decoded image (orientation applied): portrait, whatever the file metadata says.
     renderAsync: jest.fn(async () => ({
+      width: 3000,
+      height: 4000,
       saveAsync: jest.fn(async () => ({ uri: 'file:///prepared.jpg', width: 900, height: 1200 })),
     })),
   };
@@ -30,7 +35,7 @@ jest.mock('expo-image-manipulator', () => {
 
 const manipulator = ImageManipulator as unknown as {
   manipulate: jest.Mock;
-  __context: { resize: jest.Mock; renderAsync: jest.Mock };
+  __context: { resize: jest.Mock; crop: jest.Mock; renderAsync: jest.Mock };
 };
 const picker = ImagePicker as jest.Mocked<typeof ImagePicker>;
 
@@ -93,6 +98,65 @@ describe('cover prepare logic', () => {
   it('does not upscale small images', async () => {
     await createCoverService().prepare({ uri: 'file:///small.jpg', width: 300, height: 400 });
     expect(manipulator.__context.resize).not.toHaveBeenCalled();
+    expect(manipulator.__context.crop).not.toHaveBeenCalled();
+  });
+
+  it('crops the original at full resolution, measured as decoded, then resizes', async () => {
+    const result = await createCoverService().prepare({
+      uri: 'file:///camera.jpg',
+      // Sensor metadata (landscape); the decoded photo is 3000 x 4000.
+      width: 4000,
+      height: 3000,
+      source: 'camera',
+      crop: { x: 0.2, y: 0.1, width: 0.6, height: 0.8 },
+    });
+    expect(manipulator.manipulate).toHaveBeenNthCalledWith(1, 'file:///camera.jpg');
+    // The crop is applied to the decoded original (its rendered ref), in its pixels.
+    const original = await manipulator.__context.renderAsync.mock.results[0].value;
+    expect(manipulator.manipulate).toHaveBeenNthCalledWith(2, original);
+    expect(manipulator.__context.crop).toHaveBeenCalledWith({
+      originX: 600,
+      originY: 400,
+      width: 1800,
+      height: 3200,
+    });
+    expect(manipulator.__context.resize).toHaveBeenCalledWith({ height: COVER_MAX_HEIGHT });
+    const rendered = await manipulator.__context.renderAsync.mock.results[1].value;
+    expect(rendered.saveAsync).toHaveBeenCalledWith({
+      format: SaveFormat.JPEG,
+      compress: COVER_JPEG_QUALITY,
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: { uri: 'file:///prepared.jpg', width: 900, height: 1200 },
+    });
+  });
+
+  it('renders a small preview of the crop and measures images as decoded', async () => {
+    const service = createCoverService();
+    await service.renderPreview({
+      uri: 'file:///camera.jpg',
+      width: 3000,
+      height: 4000,
+      crop: { x: 0, y: 0, width: 1, height: 1 },
+    });
+    expect(manipulator.__context.resize).toHaveBeenCalledWith({ height: CROP_PREVIEW_MAX_HEIGHT });
+    await expect(service.measure('file:///camera.jpg')).resolves.toEqual({
+      ok: true,
+      data: { width: 3000, height: 4000 },
+    });
+  });
+
+  it('reports a failed crop as an error code', async () => {
+    manipulator.__context.renderAsync.mockRejectedValueOnce(new Error('decode'));
+    await expect(
+      createCoverService().prepare({
+        uri: 'file:///broken.jpg',
+        width: 10,
+        height: 10,
+        crop: { x: 0, y: 0, width: 1, height: 1 },
+      }),
+    ).resolves.toEqual({ ok: false, error: 'unknown' });
   });
 });
 
@@ -146,6 +210,7 @@ describe('storage', () => {
     await expect(service.upload('u1', 'b1', 'file:///empty.jpg')).resolves.toEqual({
       ok: false,
       error: 'unknown',
+      cause: { code: 'empty_file' },
     });
     expect(bucket.upload).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith('[covers] upload failed: empty_file');
@@ -162,6 +227,7 @@ describe('storage', () => {
     await expect(service.upload('u1', 'b1', 'file:///p.jpg')).resolves.toEqual({
       ok: false,
       error: 'unknown',
+      cause: { code: 'empty_object' },
     });
     expect(bucket.remove).toHaveBeenCalledWith(['u1/b1.jpg']);
     expectSafeLogs();
@@ -177,9 +243,10 @@ describe('storage', () => {
       getClient: () => client,
       readFile: async () => new ArrayBuffer(8),
     });
-    await expect(service.upload('u1', 'b1', 'file:///p.jpg')).resolves.toEqual({
+    await expect(service.upload('u1', 'b1', 'file:///p.jpg')).resolves.toMatchObject({
       ok: false,
       error: 'unauthorized',
+      cause: { statusCode: '403' },
     });
     expect(warn).toHaveBeenCalledWith('[covers] upload failed: unauthorized');
     expectSafeLogs();
