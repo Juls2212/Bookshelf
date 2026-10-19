@@ -5,6 +5,8 @@ import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { fonts, radii, sizes, spacing } from '@/design/tokens';
 import { t } from '@/i18n';
+import { INPUT_LIMITS } from '@/lib/inputLimits';
+import { lineInput } from '@/lib/inputSanitizers';
 
 type Props = {
   value: string;
@@ -35,12 +37,14 @@ export function SearchField({
       <Icon name="search" color={colors.textSecondary} />
       <TextInput
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={(text) => onChangeText(lineInput(text, INPUT_LIMITS.search))}
         onSubmitEditing={onSubmitEditing}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={t.search.label}
         returnKeyType="search"
+        maxLength={INPUT_LIMITS.search}
+        autoCapitalize="none"
         autoCorrect={false}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
