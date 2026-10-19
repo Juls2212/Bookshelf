@@ -10,7 +10,7 @@ import { useTheme } from '@/design/ThemeProvider';
 import { coverPalette, fonts, radii, sizes, spacing } from '@/design/tokens';
 import { t } from '@/i18n';
 
-export type AuthIllustrationVariant = 'login' | 'register';
+type AuthIllustrationVariant = 'login' | 'register';
 
 const PADDING = spacing.lg + spacing.xs;
 const VIEW_W = 360;
