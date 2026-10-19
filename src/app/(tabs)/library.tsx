@@ -18,15 +18,20 @@ import { shelfArrivalTotalMs } from '@/design/motion';
 import { useTheme } from '@/design/ThemeProvider';
 import { fonts, radii, sizes, spacing } from '@/design/tokens';
 import { filterBooks } from '@/features/library/filterBooks';
+import { FirstRunOffline } from '@/features/library/FirstRunOffline';
 import { libraryCountLabel } from '@/features/library/libraryCopy';
 import { shelfSession } from '@/features/library/shelfSession';
 import { useCoverUris } from '@/features/library/useCoverUris';
+import { SyncBadge } from '@/features/sync/SyncBadge';
+import { useFirstRun } from '@/features/sync/useFirstRun';
 import { format, t } from '@/i18n';
 import { useLibraryStore } from '@/stores/libraryStore';
+import { useSyncStore } from '@/stores/syncStore';
 
 const PADDING = spacing.lg + spacing.xs;
 
-function TitleRow({ count, onAdd }: { count: number | null; onAdd?: () => void }) {
+/** count: null = still loading (skeleton), undefined = not known yet (hidden). */
+function TitleRow({ count, onAdd }: { count?: number | null; onAdd?: () => void }) {
   return (
     <View style={styles.titleRow}>
       <View style={styles.titleText}>
@@ -35,11 +40,12 @@ function TitleRow({ count, onAdd }: { count: number | null; onAdd?: () => void }
         </AppText>
         {count === null ? (
           <Skeleton width={160} height={14} />
-        ) : (
+        ) : count !== undefined ? (
           <AppText variant="body" color="textSecondary">
             {libraryCountLabel(count)}
           </AppText>
-        )}
+        ) : null}
+        {count !== null ? <SyncBadge /> : null}
       </View>
       {onAdd ? <Button icon="plus" label={t.library.add} onPress={onAdd} /> : null}
     </View>
@@ -134,6 +140,7 @@ export default function LibraryScreen() {
   // The shelf arrival plays on the first library open of the session.
   const [arrivalActive, setArrivalActive] = useState(() => !shelfSession.arrivalPlayed);
   const hasBooks = books.length > 0;
+  const firstRun = useFirstRun(hasBooks);
 
   useEffect(() => {
     if (!arrivalActive || !hasBooks) return;
@@ -176,8 +183,34 @@ export default function LibraryScreen() {
   const openBook = (book: BookTileData) =>
     router.push({ pathname: '/book/[id]', params: { id: book.id } });
 
+  // First run without connection: a clear message instead of an endless skeleton.
+  if (firstRun === 'offline') {
+    return (
+      <Screen contentStyle={styles.noPadding}>
+        <View style={[styles.emptyContent, { paddingHorizontal: PADDING }]}>
+          <TitleRow />
+          <FirstRunOffline />
+        </View>
+      </Screen>
+    );
+  }
+
+  // First run and the download failed: retry through the sync engine.
+  if (firstRun === 'failed') {
+    return (
+      <Screen contentStyle={styles.noPadding}>
+        <View style={styles.emptyContent}>
+          <View style={{ paddingHorizontal: PADDING }}>
+            <TitleRow />
+          </View>
+          <LoadError offline={false} onRetry={() => useSyncStore.getState().syncNow()} />
+        </View>
+      </Screen>
+    );
+  }
+
   // First load: skeleton shelves.
-  if ((status === 'idle' || status === 'loading') && books.length === 0) {
+  if (((status === 'idle' || status === 'loading') && books.length === 0) || firstRun) {
     return (
       <Screen contentStyle={styles.noPadding}>
         <View style={[styles.header, { paddingHorizontal: PADDING }]}>
