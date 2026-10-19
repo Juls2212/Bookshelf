@@ -1,7 +1,7 @@
 // Spanish date formatting without Intl: names and templates live in i18n.
 import { format, t } from '@/i18n';
 
-export type GreetingKey = keyof typeof t.greeting;
+type GreetingKey = keyof typeof t.greeting;
 
 /** Morning 05:00-11:59, afternoon 12:00-19:59, evening 20:00-04:59 (local time). */
 export function greetingKeyFor(date: Date): GreetingKey {
@@ -73,4 +73,42 @@ export function formatRelativeDays(date: Date, now: Date): string {
   }
   const months = Math.floor(days / 30);
   return months === 1 ? t.dates.monthAgo : format(t.dates.monthsAgo, { count: months });
+}
+
+/** "14:05" (24-hour, local time). */
+function formatTime(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** "hoy, 14:05", "ayer, 09:30" or "2 de octubre, 18:00". */
+export function formatDayTime(date: Date, now: Date): string {
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / DAY_MS);
+  const day = days <= 0 ? t.dates.today : days === 1 ? t.dates.yesterday : formatDayMonth(date);
+  return format(t.dates.dayTime, { day, time: formatTime(date) });
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+/** The device's local calendar date as "YYYY-MM-DD" (what reading events store). */
+export function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/** Local date key of an ISO timestamp, or null when it is missing or invalid. */
+export function localDateKeyOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : localDateKey(date);
+}
+
+/**
+ * Monday to Sunday of the local week that contains `date`, as date keys. Uses calendar
+ * arithmetic (not 24 h steps), so daylight saving changes never shift the days.
+ */
+export function localWeekKeys(date: Date): { from: string; to: string } {
+  const sinceMonday = (date.getDay() + 6) % 7;
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - sinceMonday);
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  return { from: localDateKey(monday), to: localDateKey(sunday) };
 }
