@@ -7,6 +7,8 @@ import { TextField } from '@/components/TextField';
 import { useTheme } from '@/design/ThemeProvider';
 import { sizes, spacing } from '@/design/tokens';
 import { t } from '@/i18n';
+import { INPUT_LIMITS } from '@/lib/inputLimits';
+import { emailInput } from '@/lib/inputSanitizers';
 import { useProfileStore } from '@/stores/profileStore';
 
 import { authErrorMessage, validationMessage, type AuthErrorCode } from './authErrors';
@@ -59,9 +61,12 @@ export function LoginForm({ onCreateAccount }: Props) {
         label={t.auth.login.emailLabel}
         placeholder={t.auth.login.emailPlaceholder}
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(text) => setEmail(emailInput(text, INPUT_LIMITS.email))}
         keyboardType="email-address"
+        inputMode="email"
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={INPUT_LIMITS.email}
         autoComplete="email"
         textContentType="emailAddress"
         returnKeyType="next"
@@ -75,6 +80,8 @@ export function LoginForm({ onCreateAccount }: Props) {
           onChangeText={setPassword}
           secureTextEntry
           autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={INPUT_LIMITS.passwordMax}
           autoComplete="current-password"
           textContentType="password"
           returnKeyType="go"
