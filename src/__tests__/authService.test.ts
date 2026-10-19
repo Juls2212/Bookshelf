@@ -90,6 +90,25 @@ describe('auth actions', () => {
     });
   });
 
+  it('signUp lowercases the email, keeps the password as typed and cleans the name', async () => {
+    auth.signUp.mockResolvedValue({
+      data: { user: { identities: [{}] }, session: null },
+      error: null,
+    });
+    const result = await authService.signUp({
+      displayName: ' Ana \u0007   María\n',
+      email: ' Ana@Example.COM ',
+      password: '  keep my spaces  ',
+    });
+    // No session (Confirm email still on): the UI asks the user to confirm and sign in.
+    expect(result).toEqual({ ok: true, data: { sessionCreated: false } });
+    expect(auth.signUp).toHaveBeenCalledWith({
+      email: 'ana@example.com',
+      password: '  keep my spaces  ',
+      options: { data: { display_name: 'Ana María' } },
+    });
+  });
+
   it('signUp reports email_taken for an obfuscated existing user', async () => {
     auth.signUp.mockResolvedValue({
       data: { user: { identities: [] }, session: null },
