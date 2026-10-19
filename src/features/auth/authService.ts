@@ -6,14 +6,15 @@ import { AUTH_STORAGE_KEY, getSupabaseClient } from '@/lib/supabase';
 import { secureStorage } from '@/lib/secureStorage';
 
 import { mapAuthError, type AuthErrorCode } from './authErrors';
+import { cleanDisplayName, normalizeEmail } from './validation';
 
 export type AuthResult<T = null> = { ok: true; data: T } | { ok: false; error: AuthErrorCode };
 
-export type SignUpInput = { displayName: string; email: string; password: string };
-export type SignInInput = { email: string; password: string };
+type SignUpInput = { displayName: string; email: string; password: string };
+type SignInInput = { email: string; password: string };
 
 /** Max wait for the startup session check before falling back to the stored session. */
-export const RESTORE_TIMEOUT_MS = 8000;
+const RESTORE_TIMEOUT_MS = 8000;
 
 const ok = <T>(data: T): AuthResult<T> => ({ ok: true, data });
 const fail = (error: unknown): AuthResult<never> => ({ ok: false, error: mapAuthError(error) });
@@ -85,9 +86,9 @@ export function onAuthStateChange(
 export async function signUp(input: SignUpInput): Promise<AuthResult<{ sessionCreated: boolean }>> {
   try {
     const { data, error } = await getSupabaseClient().auth.signUp({
-      email: input.email.trim(),
+      email: normalizeEmail(input.email),
       password: input.password,
-      options: { data: { display_name: input.displayName.trim() } },
+      options: { data: { display_name: cleanDisplayName(input.displayName) } },
     });
     if (error) return fail(error);
     // With email confirmation on, an existing address returns a user without identities.
@@ -101,7 +102,7 @@ export async function signUp(input: SignUpInput): Promise<AuthResult<{ sessionCr
 export async function signIn(input: SignInInput): Promise<AuthResult> {
   try {
     const { error } = await getSupabaseClient().auth.signInWithPassword({
-      email: input.email.trim(),
+      email: normalizeEmail(input.email),
       password: input.password,
     });
     return error ? fail(error) : ok(null);
@@ -132,7 +133,7 @@ export async function signOut(): Promise<AuthResult> {
 
 export async function requestPasswordReset(email: string): Promise<AuthResult> {
   try {
-    const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim());
+    const { error } = await getSupabaseClient().auth.resetPasswordForEmail(normalizeEmail(email));
     return error ? fail(error) : ok(null);
   } catch (error) {
     return fail(error);
