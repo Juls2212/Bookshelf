@@ -12,10 +12,12 @@ type Props = {
   value: number | null;
   /** When provided the rating is interactive (44px targets). */
   onChange?: (value: number) => void;
+  /** Hint read on the selected star when tapping it again clears the rating. */
+  clearHint?: string;
   size?: number;
 };
 
-export function StarRating({ value, onChange, size = 22 }: Props) {
+export function StarRating({ value, onChange, clearHint, size = 22 }: Props) {
   const { colors } = useTheme();
   const current = value ?? 0;
   const summary = current > 0 ? format(t.rating.summaryA11y, { value: current }) : t.rating.none;
@@ -45,6 +47,7 @@ export function StarRating({ value, onChange, size = 22 }: Props) {
           accessibilityRole="radio"
           accessibilityLabel={n === 1 ? t.rating.starOne : format(t.rating.starMany, { value: n })}
           accessibilityState={{ checked: n === current }}
+          accessibilityHint={n === current ? clearHint : undefined}
           style={styles.target}
         >
           <Icon
