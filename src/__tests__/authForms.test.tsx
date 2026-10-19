@@ -159,6 +159,90 @@ describe('RegisterForm', () => {
     expect(await screen.findByText(t.auth.register.welcome)).toBeOnTheScreen();
   });
 
+  it('goes straight into the app after sign-up: no code step, no check-email screen', async () => {
+    service.signUp.mockResolvedValue({ ok: true, data: { sessionCreated: true } });
+    await renderUi(<RegisterForm onSignIn={jest.fn()} />);
+    await fill();
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.submit }));
+
+    expect(await screen.findByText(t.auth.register.welcome)).toBeOnTheScreen();
+    expect(screen.queryByText(t.auth.register.checkEmailTitle)).toBeNull();
+    expect(screen.queryByText(t.auth.register.goToLogin)).toBeNull();
+  });
+
+  it('asks to confirm the email and returns to login when no session comes back', async () => {
+    const onSignIn = jest.fn();
+    service.signUp.mockResolvedValue({ ok: true, data: { sessionCreated: false } });
+    await renderUi(<RegisterForm onSignIn={onSignIn} />);
+    await fill();
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.submit }));
+
+    expect(await screen.findByText(t.auth.register.checkEmailTitle)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.goToLogin }));
+    expect(onSignIn).toHaveBeenCalled();
+  });
+
+  it('has a "Repetir contraseña" field and blocks a mismatch', async () => {
+    expect(t.auth.register.confirmLabel).toBe('Repetir contraseña');
+    await renderUi(<RegisterForm onSignIn={jest.fn()} />);
+    await fireEvent.changeText(screen.getByLabelText(t.auth.register.nameLabel), 'Ana');
+    await fireEvent.changeText(
+      screen.getByLabelText(t.auth.register.emailLabel),
+      'ana@example.com',
+    );
+    await fireEvent.changeText(screen.getByLabelText(t.auth.register.passwordLabel), 'secret-123');
+    await fireEvent.changeText(screen.getByLabelText(t.auth.register.confirmLabel), 'secret-124');
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.submit }));
+    expect(screen.getByText(v.password_mismatch)).toBeOnTheScreen();
+    expect(service.signUp).not.toHaveBeenCalled();
+  });
+
+  it('lowercases a pasted email, rejects inner spaces and never alters passwords', async () => {
+    await renderUi(<RegisterForm onSignIn={jest.fn()} />);
+    const email = screen.getByLabelText(t.auth.register.emailLabel);
+    await fireEvent.changeText(email, '  Ana@Example.COM ');
+    expect(email.props.value).toBe('ana@example.com');
+
+    const password = screen.getByLabelText(t.auth.register.passwordLabel);
+    await fireEvent.changeText(password, '  Mixed Case  ');
+    expect(password.props.value).toBe('  Mixed Case  ');
+
+    await fireEvent.changeText(email, 'a b@example.com');
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.submit }));
+    expect(screen.getByText(v.email_invalid)).toBeOnTheScreen();
+    expect(service.signUp).not.toHaveBeenCalled();
+  });
+
+  it('applies the limits and keyboards to every field', async () => {
+    await renderUi(<RegisterForm onSignIn={jest.fn()} />);
+    const name = screen.getByLabelText(t.auth.register.nameLabel);
+    const email = screen.getByLabelText(t.auth.register.emailLabel);
+    const password = screen.getByLabelText(t.auth.register.passwordLabel);
+    const repeat = screen.getByLabelText(t.auth.register.confirmLabel);
+    expect(name.props.maxLength).toBe(50);
+    expect(email.props.maxLength).toBe(254);
+    expect(email.props.keyboardType).toBe('email-address');
+    expect(email.props.autoCapitalize).toBe('none');
+    expect(email.props.autoCorrect).toBe(false);
+    expect(password.props.maxLength).toBe(72);
+    expect(repeat.props.maxLength).toBe(72);
+    expect(password.props.autoComplete).toBe('new-password');
+
+    await fireEvent.changeText(name, `${'a'.repeat(80)}\u0000`);
+    expect(name.props.value).toBe('a'.repeat(50));
+  });
+
+  it('rejects a pasted password over 72 characters on submit', async () => {
+    await renderUi(<RegisterForm onSignIn={jest.fn()} />);
+    await fill();
+    const tooLong = 'p'.repeat(73);
+    await fireEvent.changeText(screen.getByLabelText(t.auth.register.passwordLabel), tooLong);
+    await fireEvent.changeText(screen.getByLabelText(t.auth.register.confirmLabel), tooLong);
+    await fireEvent.press(screen.getByRole('button', { name: t.auth.register.submit }));
+    expect(screen.getByText(v.password_too_long)).toBeOnTheScreen();
+    expect(service.signUp).not.toHaveBeenCalled();
+  });
+
   it('shows email_taken in Spanish', async () => {
     service.signUp.mockResolvedValue({ ok: false, error: 'email_taken' });
     await renderUi(<RegisterForm onSignIn={jest.fn()} />);
