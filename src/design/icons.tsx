@@ -2,8 +2,12 @@ import {
   ArrowRight,
   Book,
   Check,
+  ChevronDown,
   ChevronLeft,
   CircleAlert,
+  Clock,
+  CloudOff,
+  Crop,
   Ellipsis,
   Eye,
   EyeOff,
@@ -43,6 +47,7 @@ const icons = {
   zap: Zap,
   sun: Sun,
   'chevron-left': ChevronLeft,
+  'chevron-down': ChevronDown,
   ellipsis: Ellipsis,
   eye: Eye,
   'eye-off': EyeOff,
@@ -54,6 +59,9 @@ const icons = {
   book: Book,
   star: Star,
   'arrow-right': ArrowRight,
+  clock: Clock,
+  'cloud-off': CloudOff,
+  crop: Crop,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
