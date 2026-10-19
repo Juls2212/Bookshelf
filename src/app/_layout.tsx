@@ -13,13 +13,17 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ToastProvider } from '@/components/Toast';
 import { ThemeProvider, useTheme } from '@/design/ThemeProvider';
 import { palettes } from '@/design/tokens';
 import { useProfileSync } from '@/features/profile/useProfileSync';
+import { useSyncLifecycle } from '@/features/sync/syncRuntime';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { bindUserMemoryToAuth } from '@/stores/userMemory';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Splash may already be hidden (e.g. fast refresh); nothing to do.
@@ -29,6 +33,8 @@ function ThemedStack() {
   const { colors, scheme } = useTheme();
   const signedIn = useAuthStore((state) => state.status === 'signedIn');
   useProfileSync();
+  useSyncLifecycle();
+  useEffect(() => bindUserMemoryToAuth(), []);
   return (
     <>
       <Stack
@@ -84,10 +90,15 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <ThemedStack />
-      </ToastProvider>
-    </ThemeProvider>
+    // Required by react-native-gesture-handler (draggable reading progress).
+    <GestureHandlerRootView style={styles.root}>
+      <ThemeProvider>
+        <ToastProvider>
+          <ThemedStack />
+        </ToastProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });
