@@ -1,37 +1,82 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IconName } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { radii, sizes, spacing, typeScale, type ColorToken } from '@/design/tokens';
-import { t } from '@/i18n';
 
-export type SyncStatus = keyof typeof t.sync;
+export type SyncBadgeKind = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 
-const statusStyle: Record<SyncStatus, { icon: IconName; color: ColorToken }> = {
-  syncing: { icon: 'refresh', color: 'textSecondary' },
+// Every state has its own icon and text, so color is never the only signal.
+const kindStyle: Record<SyncBadgeKind, { icon: IconName; color: ColorToken }> = {
   synced: { icon: 'check', color: 'success' },
+  syncing: { icon: 'refresh', color: 'textSecondary' },
+  pending: { icon: 'clock', color: 'accentText' },
+  offline: { icon: 'cloud-off', color: 'textSecondary' },
   error: { icon: 'alert-circle', color: 'danger' },
 };
 
-// Static badge; real sync state arrives with the data layer.
-export function SyncStatusBadge({ status }: { status: SyncStatus }) {
+type Props = {
+  kind: SyncBadgeKind;
+  label: string;
+  accessibilityLabel: string;
+  /** Makes the badge a button (e.g. retry in the error state). */
+  onPress?: () => void;
+  accessibilityHint?: string;
+};
+
+export function SyncStatusBadge({
+  kind,
+  label,
+  accessibilityLabel,
+  onPress,
+  accessibilityHint,
+}: Props) {
   const { colors } = useTheme();
-  const s = statusStyle[status];
+  const s = kindStyle[kind];
   const color = colors[s.color];
-  return (
-    <View
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={t.sync[status]}
-      style={[styles.badge, { borderColor: color }]}
-    >
+  const badge = (
+    <View style={[styles.badge, { borderColor: color }]}>
       <Icon name={s.icon} size={12} color={color} strokeWidth={2} />
-      <Text style={[typeScale.tag, styles.text, { color }]}>{t.sync[status]}</Text>
+      <Text style={[typeScale.tag, styles.text, { color }]}>{label}</Text>
     </View>
+  );
+
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityLiveRegion="polite"
+        style={styles.wrap}
+      >
+        {badge}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityLiveRegion="polite"
+      style={({ pressed }) => [styles.wrap, styles.touch, pressed && styles.pressed]}
+    >
+      {badge}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: { alignSelf: 'flex-start' },
+  // The visual badge stays small; the touch area is at least 44 x 44.
+  touch: {
+    minHeight: sizes.minTouchTarget,
+    minWidth: sizes.minTouchTarget,
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.7 },
   badge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
