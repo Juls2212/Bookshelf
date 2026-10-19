@@ -5,7 +5,7 @@ import { useThemeStore, type ThemeMode } from '@/stores/themeStore';
 
 import { palettes, type ColorScheme, type Palette } from './tokens';
 
-export type Theme = {
+type Theme = {
   colors: Palette;
   scheme: ColorScheme;
   mode: ThemeMode;
