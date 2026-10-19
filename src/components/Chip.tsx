@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { Icon } from '@/design/icons';
 import { useTheme } from '@/design/ThemeProvider';
 import { radii, sizes, spacing, typeScale } from '@/design/tokens';
 
@@ -7,16 +8,27 @@ type Props = {
   label: string;
   selected: boolean;
   onPress?: () => void;
+  /** Shows a check mark while selected, so the state is not told by color alone. */
+  checkWhenSelected?: boolean;
+  accessibilityHint?: string;
 };
 
-export function Chip({ label, selected, onPress }: Props) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  checkWhenSelected = false,
+  accessibilityHint,
+}: Props) {
   const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      // A multi-select chip is a checkbox; a single-choice chip stays a button.
+      accessibilityRole={checkWhenSelected ? 'checkbox' : 'button'}
       accessibilityLabel={label}
-      accessibilityState={{ selected }}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={checkWhenSelected ? { checked: selected } : { selected }}
       style={({ pressed }) => [
         styles.chip,
         selected
@@ -25,6 +37,9 @@ export function Chip({ label, selected, onPress }: Props) {
         pressed && styles.pressed,
       ]}
     >
+      {checkWhenSelected && selected ? (
+        <Icon name="check" size={16} color={colors.actionPrimaryText} strokeWidth={2.5} />
+      ) : null}
       <Text
         style={[
           typeScale.button,
@@ -44,6 +59,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.pill,
     borderWidth: sizes.borderWidth,
+    flexDirection: 'row',
+    gap: spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
