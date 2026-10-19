@@ -8,16 +8,6 @@ export function libraryCountLabel(count: number): string {
   return format(t.library.countMany, { count });
 }
 
-/** The book being read that was touched most recently, if any. */
-export function currentReading(books: readonly Book[]): Book | null {
-  let best: Book | null = null;
-  for (const book of books) {
-    if (book.readingStatus !== 'reading') continue;
-    if (!best || book.updatedAt > best.updatedAt) best = book;
-  }
-  return best;
-}
-
 /** Most recently added books (newest first). */
 export function recentBooks(books: readonly Book[], limit: number, excludeId?: string): Book[] {
   return [...books]
