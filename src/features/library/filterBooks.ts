@@ -2,9 +2,9 @@
 import { isLent } from '@/lib/book';
 import type { Book } from '@/types/book';
 
-export type BookFilter = 'all' | 'reading' | 'to_read' | 'finished' | 'lent';
+type BookFilter = 'all' | 'reading' | 'to_read' | 'finished' | 'lent';
 
-export type BookQuery = {
+type BookQuery = {
   query?: string;
   filter?: BookFilter;
   /** Optional genre; compared ignoring case and accents. */
