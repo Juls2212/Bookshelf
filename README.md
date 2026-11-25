@@ -1,313 +1,366 @@
-# Bookshelf
+<div align="center">
 
-Bookshelf es una app móvil para llevar **tu biblioteca personal**: registrar los libros que
-tienes, seguir lo que lees y recibir recomendaciones de un «librero» que conoce tu estante. Funciona
-**sin conexión** (local-first) y se sincroniza con Supabase cuando hay red.
+# 📚 Bookshelf
 
-Proyecto final de Diseño de Interfaces. Android es la plataforma principal (Expo Go y APK con EAS).
+**Tu biblioteca personal en el bolsillo: organiza tus libros, sigue tu lectura y deja que un «librero» con IA te recomiende el siguiente.**
 
-## Alcance
+![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Auth%20%C2%B7%20Postgres%20%C2%B7%20Edge-3FCF8E?logo=supabase&logoColor=white)
+![Android](https://img.shields.io/badge/Plataforma-Android-3DDC84?logo=android&logoColor=white)
 
-**Incluye**
+</div>
 
-- Cuenta de usuario (registro, inicio de sesión, cierre de sesión seguro).
-- Biblioteca: añadir, editar y borrar libros, con portada (foto, galería o portada tipográfica).
-- Seguimiento de lectura: por leer / leyendo / terminado, página actual, valoración, notas y
-  préstamos.
-- Escáner con cámara que propone los datos del libro (IA) y «Mejorar portada» (enderezar y
-  ajustar niveles).
-- «Sugerir datos» en el formulario (autor, género y páginas a partir del título).
-- Librero: una recomendación de tu propio estante, y «Nuevas aventuras» (un libro que aún no
-  tienes), con historial.
-- Preferencias de lectura, estadísticas básicas en Inicio, perfil y tema claro/oscuro.
+## Contenido
 
-**Fuera del alcance (a propósito)**: red social o funciones compartidas, tienda o enlaces de
-compra, lector de libros electrónicos, escaneo de una estantería completa, gamificación (logros,
-rachas, puntos) y estadísticas avanzadas.
+1. [Descargar la app](#descargar-la-app)
+2. [Qué es Bookshelf](#qué-es-bookshelf)
+3. [Funcionalidades](#funcionalidades)
+4. [Capturas de pantalla](#capturas-de-pantalla)
+5. [Stack tecnológico](#stack-tecnológico)
+6. [Arquitectura](#arquitectura)
+7. [Seguridad](#seguridad)
+8. [Estructura del proyecto](#estructura-del-proyecto)
+9. [Ejecutar desde el código](#ejecutar-desde-el-código)
+10. [Configurar Supabase](#configurar-supabase)
+11. [Generar el APK con EAS](#generar-el-apk-con-eas)
+12. [Pruebas y calidad](#pruebas-y-calidad)
+13. [Limitaciones conocidas](#limitaciones-conocidas)
+14. [Autoría y contexto del curso](#autoría-y-contexto-del-curso)
 
-## Funciones por área
+---
 
-| Área         | Qué hace                                                                                                                                                                                 |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cuenta       | Registro e inicio de sesión con correo y contraseña. Al cerrar sesión se borra de la memoria todo lo del usuario anterior.                                                               |
-| Inicio       | Libro en curso con progreso, colección reciente, acceso al librero y estadísticas (Hoy, Esta semana, Este año, Total).                                                                   |
-| Biblioteca   | Estante en cuadrícula, búsqueda sin acentos ni mayúsculas, filtros por estado, prestados y género.                                                                                       |
-| Ficha        | Estado, página actual, valoración, notas, préstamo, libros relacionados, editar y borrar.                                                                                                |
-| Añadir libro | Formulario con validación, portada con recorte y «Sugerir datos». Las páginas son obligatorias.                                                                                          |
-| Escáner      | Foto de portada o lomo → propuesta de datos → «Revisa tu libro». Opción «Mejorar portada» (esquinas, perspectiva, niveles) con Original/Mejorada.                                        |
-| Librero      | Recomendación con motivo, filtros de tiempo y ánimo, «Leer después», «Otra recomendación» e historial. «Nuevas aventuras» sugiere libros nuevos.                                         |
-| Perfil       | Foto de perfil (cámara o galería, recorte cuadrado), nombre, preferencias de lectura (géneros, priorizar no leídos, ánimo, libros cortos entre semana), tema y estado de sincronización. |
+## Descargar la app
 
-## Tecnología
+<div align="center">
 
-- React Native 0.86 + **Expo SDK 57** + TypeScript estricto + **Expo Router** (React Compiler
-  activado).
-- Estado: Zustand. Animaciones: Reanimated 4 (respetan «reducir movimiento»).
-- Datos locales: **expo-sqlite**. Sesión en almacenamiento seguro (expo-secure-store).
-- Backend: **Supabase** (Auth, Postgres con RLS, Storage, Edge Functions en Deno).
-- IA: OpenAI **solo** desde Edge Functions; la app nunca ve la clave.
-- Imagen: expo-camera, expo-image-picker, expo-image-manipulator y
-  `@shopify/react-native-skia` (Mejorar portada).
-- Calidad: Jest + Testing Library, ESLint, Prettier, `scripts/checkSecrets.mjs`.
+### ⬇️ [**Descargar Bookshelf para Android (APK v1.0.0)**](https://github.com/Juls2212/Bookshelf/releases/tag/v1.0.0)
+
+</div>
+
+**Instalación en Android**
+
+1. Abre el enlace de arriba desde el teléfono y descarga el archivo `.apk`.
+2. Cuando Android lo pida, permite **«instalar apps desconocidas»** para el navegador o el
+   administrador de archivos que usaste.
+3. Abre el APK descargado y pulsa **Instalar**.
+4. Abre Bookshelf y **crea una cuenta** con correo y contraseña.
+
+**Qué debes saber**
+
+- La app es **solo para Android** y se distribuye como _preview build_ (APK de distribución
+  interna), no desde Google Play.
+- Necesitas **conexión a internet** para el primer inicio de sesión y para las funciones de IA
+  (escáner, sugerencias y librero). El resto de la app funciona **sin conexión** y se sincroniza
+  cuando vuelve la red.
+
+---
+
+## Qué es Bookshelf
+
+Quien lee con frecuencia suele perder la pista de lo que tiene, lo que está leyendo, lo que
+prestó y qué leer después. Las hojas de cálculo son incómodas y las apps de lectura sociales
+piden más de lo necesario.
+
+Bookshelf es para **lectores que quieren un estante personal y privado**: registras tus libros
+(incluso con una foto), ves tu progreso, controlas los préstamos y recibes recomendaciones basadas
+en tu propio estante. Todo funciona sin conexión y se sincroniza con tu cuenta.
+
+**Fuera del alcance a propósito:** red social, tienda o enlaces de compra, lector de libros
+electrónicos, escaneo de una estantería completa, gamificación y estadísticas avanzadas.
+
+---
+
+## Funcionalidades
+
+**Biblioteca y estados**
+
+- Estante en cuadrícula con búsqueda sin acentos ni mayúsculas y filtros por estado, prestados y
+  género.
+- Tres estados: **Por leer**, **Leyendo** y **Leído**.
+- Alta, edición y borrado de libros con validación de campos.
+
+**Seguimiento de lectura**
+
+- Progreso con **marcador arrastrable** para la página actual.
+- **Valoración con estrellas solo en libros leídos**, más notas por libro.
+- **Préstamos**: a quién se lo prestaste y filtro de prestados.
+
+**Portadas**
+
+- Foto con la **cámara** o desde la galería, con **recorte**.
+- «Mejorar portada»: **corrección de perspectiva** (esquinas ajustables) y niveles, con vista
+  Original/Mejorada.
+- **Portadas sugeridas** desde Open Library y Google Books, que puedes aceptar o descartar.
+- Portada tipográfica cuando el libro no tiene imagen.
+
+**Inteligencia artificial** (siempre revisable antes de guardar)
+
+- **Identificar un libro desde una foto** de la portada o el lomo, con pantalla «Revisa tu libro»
+  editable.
+- **Autocompletar datos** (autor, género, páginas y título oficial cuando hay certeza).
+- **Librero**: una recomendación de tu propio estante con el motivo, filtros de tiempo y ánimo,
+  «Leer después», «Otra recomendación» e historial.
+- **Nuevas aventuras**: sugiere libros que aún no tienes.
+
+**Estadísticas y perfil**
+
+- Estadísticas de lectura diaria: **Hoy, Esta semana, Este año y Total**.
+- Foto de perfil (cámara o galería, recorte cuadrado), nombre y preferencias de lectura.
+- Tema **claro y oscuro**.
+
+**Offline-first**
+
+- Cada usuario tiene su base SQLite local; cada cambio se guarda al instante y se sincroniza con
+  Supabase cuando hay red. La insignia de sincronización muestra el estado y los cambios
+  pendientes.
+
+---
+
+## Capturas de pantalla
+
+<!--
+  Aún no existe la carpeta docs/screenshots/.
+  Crea la carpeta, copia allí las capturas (por ejemplo inicio.png, biblioteca.png, ficha.png,
+  escaner.png, librero.png, perfil.png) y añade aquí, una por línea:
+  ![Inicio](docs/screenshots/inicio.png)
+-->
+
+_Próximamente: las capturas se añadirán en `docs/screenshots/`._
+
+---
+
+## Stack tecnológico
+
+| Grupo                 | Tecnologías                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| App                   | React Native 0.86, Expo SDK 57, TypeScript estricto, Expo Router, Reanimated 4, Gesture Handler, Lucide |
+| Estado y datos        | Zustand, expo-sqlite (base local por usuario), expo-secure-store (sesión), NetInfo                    |
+| Backend               | Supabase: Auth, Postgres con RLS, Storage privado, Edge Functions (Deno)                              |
+| IA y APIs externas    | OpenAI (`gpt-4o-mini`) solo desde Edge Functions; Open Library y Google Books para portadas           |
+| Imágenes              | expo-camera, expo-image-picker, expo-image-manipulator, expo-image, `@shopify/react-native-skia`      |
+| Calidad y entrega     | Jest + Testing Library, ESLint, Prettier, `scripts/checkSecrets.mjs`, EAS Build                       |
+
+---
 
 ## Arquitectura
 
-- **Local-first.** Cada usuario tiene su propia base SQLite en el dispositivo. La interfaz lee y
-  escribe siempre en local; cada cambio queda en una cola (`sync_queue`).
-- **Motor de sincronización** (`src/features/sync`). Envía la cola cuando hay red, descarga los
-  cambios del servidor y resuelve conflictos con «gana la última escritura». Las portadas se suben
-  al bucket privado `book-covers`.
-- **Repositorios.** La UI nunca llama a Supabase ni a SQLite directamente. Usa repositorios y
-  servicios con interfaz (`bookRepository`, `recommendationService`, etc.) y sus
-  implementaciones SQLite/Supabase. En desarrollo existen implementaciones de prueba que no
-  entran en el bundle de producción.
-- **Edge Functions** (`supabase/functions`):
-  - Las cuatro funciones son `identify-book`, `suggest-book-details`, `recommend-book` y
-    `discover-book`.
-  - Comparten lógica pura en `_shared`.
-  - Cada una verifica la sesión del usuario, valida tamaños, aplica un límite de uso (tabla
-    `ai_usage`) y registra solo códigos de error.
-- **Seguridad.**
-  - Todas las tablas tienen RLS por `auth.uid()`. `ai_usage` no es accesible para los usuarios.
-  - El bucket de portadas es privado, con carpetas por usuario.
-  - La app solo conoce dos variables públicas. `npm run verify` falla si aparece una clave
-    secreta en el repositorio.
-- **Idiomas.** Código, nombres, comentarios y errores internos van en inglés. Todo el texto
-  visible para el usuario va en español neutro y vive en `src/i18n/es.ts`.
+La interfaz nunca habla con Supabase ni con SQLite directamente: usa **repositorios y servicios**
+con interfaz. Las escrituras van siempre a la base local y a una cola de sincronización.
 
-## Estructura
+```mermaid
+flowchart TD
+  UI[Pantallas y componentes] --> ST[Stores Zustand]
+  ST --> RE[Repositorios y servicios]
+  RE --> DB[(SQLite local)]
+  RE --> SQ[sync_queue]
+  SQ --> SE[Motor de sincronización]
+  SE <--> AU[Supabase Auth]
+  SE <--> PG[(Postgres + RLS)]
+  SE <--> SO[Storage privado]
+  RE --> EF[Edge Functions]
+  EF --> OA[OpenAI]
+  EF --> CAT[Open Library / Google Books]
+```
+
+- **Local-first:** la app funciona sin red y cada cambio queda en `sync_queue`.
+- **Conflictos:** gana la última escritura (_last-write-wins_).
+- **Registro de lectura:** cada cambio de página añade una fila en `reading_events` en la misma
+  transacción que el libro; solo se inserta, nunca se edita.
+- **Cierre de sesión:** borra de la memoria todo lo del usuario; un cierre limpio también borra su
+  base local, portadas y foto de perfil.
+- **Idiomas:** el código va en inglés; el texto visible, en español neutro (`src/i18n/es.ts`).
+
+---
+
+## Seguridad
+
+- **Sin secretos en la app:** solo viajan `EXPO_PUBLIC_SUPABASE_URL` y
+  `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, públicas por diseño.
+- **OpenAI solo por Edge Functions:** la clave es un secreto de Supabase y nunca llega al
+  teléfono.
+- **RLS en todas las tablas** por `auth.uid()`; la tabla `ai_usage` no es accesible para los
+  usuarios.
+- **Storage privado** (`book-covers` y `avatars`), con carpetas por usuario y **URLs firmadas**.
+- **Límites de uso por usuario** en cada función de IA (por hora y por día).
+- **Límites de entrada** definidos una sola vez en `src/lib/inputLimits.ts`, aplicados en la app,
+  en las Edge Functions y en restricciones CHECK de la base de datos; una prueba comprueba que
+  coinciden.
+- `npm run verify` falla si aparece una clave secreta en el repositorio.
+
+---
+
+## Estructura del proyecto
 
 ```text
 src/
-  app/            Rutas de Expo Router (delgadas): (auth), (tabs), book/, scan, dev-gallery
-  components/     Componentes de interfaz reutilizables
-  design/         Tokens de color y tipografía, tema, iconos, movimiento, contraste
-  features/       auth, library, scan, suggestions, recommendations, librarian,
-                  preferences, profile, sync
-  db/             Esquema SQLite, migraciones locales y cola de sincronización
-  lib/            Supabase, entorno, red, fechas, almacenamiento seguro
-  stores/         Stores de Zustand
-  i18n/           es.ts (todo el texto visible)
-  dev/            Galería y servicios de prueba (solo desarrollo)
-  __tests__/      Pruebas de Jest
+  app/          Rutas de Expo Router (delgadas): (auth), (tabs), book, scan, dev-gallery
+  components/   Componentes de interfaz reutilizables
+  design/       Tokens de color y tipografía, tema, iconos, movimiento, contraste
+  features/     auth, library, scan, suggestions, recommendations, librarian,
+                preferences, profile, sync
+  db/           Esquema SQLite, migraciones locales y cola de sincronización
+  lib/          Supabase, entorno, red, fechas, límites y saneado de entradas
+  stores/       Stores de Zustand
+  i18n/         es.ts (todo el texto visible)
+  dev/          Galería y servicios de prueba (solo desarrollo)
+  test-utils/   Ayudas para las pruebas
+  types/        Tipos compartidos
+  __tests__/    Pruebas de Jest
 supabase/
-  migrations/     SQL en orden (se ejecuta a mano)
-  functions/      Edge Functions y lógica compartida
-  tests/          rls_isolation.sql, constraints.sql
-scripts/          checkSecrets.mjs, generateAssets.mjs
-docs/             supabase-setup.md, ai-setup.md, qa-checklist.md
+  migrations/   SQL en orden (se ejecuta a mano)
+  functions/    Edge Functions y lógica compartida (_shared)
+  tests/        rls_isolation.sql, constraints.sql
+scripts/        checkSecrets.mjs, generateAssets.mjs
+docs/           supabase-setup.md, ai-setup.md, qa-checklist.md, references/
+assets/         Iconos y splash provisionales
 ```
 
-## Requisitos
+---
 
-- Node.js 20 o superior (probado con 22) y npm.
-- Un proyecto de Supabase.
-- Para la IA: una clave de OpenAI que solo se guarda como secreto de Supabase.
-- Para probar: Expo Go en un teléfono Android, o una cuenta de Expo para compilar el APK.
+## Ejecutar desde el código
 
-## Instalación
+**Requisitos:** Node.js 20 o superior (probado con 22), npm, un proyecto de Supabase y, para la
+IA, una clave de OpenAI (se guarda solo en Supabase).
 
 ```sh
 npm install
 ```
 
-En **Windows**, si la instalación falla en el script de `@shopify/react-native-skia`
-(`install-libs.js` se cierra con un error), usa:
+En **Windows**, si la instalación falla en el script de `@shopify/react-native-skia`, usa
+`npm install --ignore-scripts`. Es un atajo **solo para instalaciones locales en Windows**.
 
-```sh
-npm install --ignore-scripts
+**Variables de entorno:** copia `.env.example` como `.env` y completa estas dos (los valores son
+tuyos; nunca los subas al repositorio):
+
+```text
+EXPO_PUBLIC_SUPABASE_URL
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ```
 
-Ese atajo es **solo** para instalaciones locales en Windows. Expo Go no lo necesita, y EAS
-compila en Linux, donde el script funciona.
-
-## Variables de entorno
-
-Copia `.env.example` como `.env` y rellena **solo** estas dos:
+Después inicia el servidor de desarrollo:
 
 ```sh
-EXPO_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<clave publicable (sb_publishable_...)>
+npx expo start -c
 ```
 
-Son públicas por diseño: viajan dentro de la app.
+**Limitaciones de Expo Go:** sirve para probar la interfaz y las funciones con red, pero **no
+permite probar el modo sin conexión**. Para eso instala el APK. Si la red bloquea el código QR,
+usa `npx expo start --tunnel`. En desarrollo, **Perfil → Galería de componentes** ofrece servicios
+de prueba (escáner, sugerencias, librero) sin gastar IA; no existe en el APK.
 
-> **Nunca** pongas la clave de OpenAI, la clave secreta o la de servicio (`service_role`) de
-> Supabase en `.env`, en `app.json`, en `src/` ni en ningún archivo del repositorio. Las variables
-> `EXPO_PUBLIC_*` se incluyen en el bundle y cualquiera puede leerlas. La clave de OpenAI vive solo
-> como secreto de Supabase.
+---
 
-## Configurar Supabase (en orden)
+## Configurar Supabase
 
-Detalles en `docs/supabase-setup.md` y `docs/ai-setup.md`.
+Guía completa en [`docs/supabase-setup.md`](docs/supabase-setup.md).
 
-1. **Migraciones**, en el orden siguiente (todas son idempotentes). En el panel: **SQL Editor →
-   New query**, pega el archivo y pulsa **Run**.
-   1. `supabase/migrations/20261010000000_initial_schema.sql`: tablas, triggers y RLS.
-   2. `supabase/migrations/20261010000100_storage_covers.sql`: bucket privado `book-covers` y
-      sus políticas.
-   3. `supabase/migrations/20261011000000_ai_usage.sql`: límites de uso de la IA.
-   4. `supabase/migrations/20261012000000_discovery_recommendations.sql` (fase 7.5):
-      «Nuevas aventuras».
-   5. `supabase/migrations/20261013000000_profile_avatars.sql` (fase 9.1): foto de perfil
-      (columnas `avatar_path` y `avatar_updated_at`, bucket privado `avatars` y sus políticas).
-   6. `supabase/migrations/20261014000000_reading_events.sql` (fase 9.2): registro de lectura
-      diario (tabla `reading_events`, solo lectura e inserción de las filas propias).
-   7. `supabase/migrations/20261015000000_input_constraints.sql` (fase 10.1): límites en el
-      servidor para los textos y las páginas (restricciones CHECK). Antes recorta los valores
-      existentes que se pasen del límite.
-2. **Pruebas de SQL**: ejecuta `supabase/tests/rls_isolation.sql` (debe devolver
-   `RLS isolation test passed`) y `supabase/tests/constraints.sql` (debe devolver
-   `Input constraints test passed`). Ninguna guarda nada, porque terminan con `ROLLBACK`.
-3. **Storage**: comprueba en **Storage** que `book-covers` y `avatars` existen y son **privados**.
-4. **Auth**: en **Authentication → Sign In / Providers → Email**, **desactiva «Confirm email»**.
-   La app no tiene paso de código de verificación: al registrarse entra directo. Si lo dejas
-   activo, el registro funciona pero no devuelve sesión, y la app pide confirmar el correo y
-   volver a iniciar sesión. Contraseña mínima: 8 (la app admite hasta 72).
-5. **Secretos y funciones**. Los comandos se ejecutan en la carpeta del proyecto; la CLI de
-   Supabase ya está en las dependencias de desarrollo.
+**1. Migraciones**, en este orden (SQL Editor → New query → Run):
 
-   ```sh
-   npx supabase login
-   npx supabase link --project-ref <ref-del-proyecto>
-   npx supabase secrets set OPENAI_API_KEY=<tu-clave> OPENAI_MODEL=<modelo>
-   npx supabase functions deploy identify-book
-   npx supabase functions deploy suggest-book-details
-   npx supabase functions deploy recommend-book
-   npx supabase functions deploy discover-book
-   npx supabase functions deploy find-cover
-   ```
+| #   | Archivo                                                          |
+| --- | ---------------------------------------------------------------- |
+| 1   | `supabase/migrations/20261010000000_initial_schema.sql`          |
+| 2   | `supabase/migrations/20261010000100_storage_covers.sql`          |
+| 3   | `supabase/migrations/20261011000000_ai_usage.sql`                |
+| 4   | `supabase/migrations/20261012000000_discovery_recommendations.sql` |
+| 5   | `supabase/migrations/20261013000000_profile_avatars.sql`         |
+| 6   | `supabase/migrations/20261014000000_reading_events.sql`          |
+| 7   | `supabase/migrations/20261015000000_input_constraints.sql`       |
 
-   No uses `--no-verify-jwt`. Comprueba los secretos con `npx supabase secrets list`, que solo
-   muestra los nombres.
+**2. Auth:** en **Authentication → Sign In / Providers → Email**, **desactiva «Confirm email»**.
+La app no tiene paso de código de verificación: al registrarse entra directo.
 
-## Scripts
+**3. Edge Functions** (las cinco):
 
-| Comando                           | Qué hace                                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `npm start`                       | Inicia Expo (servidor de desarrollo).                                        |
-| `npm run typecheck`               | TypeScript sin emitir.                                                       |
-| `npm run lint`                    | ESLint (0 avisos permitidos).                                                |
-| `npm run format:check`            | Prettier en modo comprobación (`npm run format` corrige).                    |
-| `npm test`                        | Pruebas de Jest.                                                             |
-| `npm run check:secrets`           | Busca claves secretas en el repositorio (nunca lee `.env`).                  |
-| `npm run verify`                  | Todo lo anterior en orden: debe pasar antes de entregar cualquier cambio.    |
-| `node scripts/generateAssets.mjs` | Regenera el icono, el icono adaptable, la splash y el favicon provisionales. |
+```sh
+npx supabase login
+npx supabase link --project-ref <ref-del-proyecto>
+npx supabase functions deploy identify-book
+npx supabase functions deploy suggest-book-details
+npx supabase functions deploy recommend-book
+npx supabase functions deploy discover-book
+npx supabase functions deploy find-cover
+```
 
-## Probar con Expo Go
+No uses `--no-verify-jwt`.
 
-1. Configura `.env` y Supabase (pasos anteriores).
-2. Ejecuta `npm start` y escanea el código QR con Expo Go, con el teléfono en la misma red.
-3. Si la red lo bloquea, usa `npx expo start --tunnel`.
-4. En desarrollo, **Perfil → Galería de componentes** permite usar servicios de prueba (escáner,
-   sugerencias, librero) sin gastar IA. La galería no existe en el APK.
+**4. Secretos de las funciones:**
 
-## Compilar e instalar el APK (EAS)
+```sh
+npx supabase secrets set OPENAI_API_KEY=<tu-clave> OPENAI_MODEL=gpt-4o-mini
+npx supabase secrets set GOOGLE_BOOKS_API_KEY=<tu-clave-de-google-books>   # opcional
+```
 
-`eas.json` define tres perfiles:
+> ⚠️ **Estos secretos se guardan únicamente en Supabase.** Nunca los pongas en `.env`,
+> `app.json`, `src/` ni en ningún archivo del repositorio.
 
-- `development`: cliente de desarrollo. Antes hay que instalar `expo-dev-client` con
-  `npx expo install expo-dev-client`.
-- `preview`: APK de distribución interna.
-- `production`: App Bundle para Google Play.
+Más detalles de las funciones, límites y errores en [`docs/ai-setup.md`](docs/ai-setup.md).
+
+---
+
+## Generar el APK con EAS
+
+`eas.json` define tres perfiles: `development` (cliente de desarrollo), `preview` (APK de
+distribución interna) y `production` (App Bundle).
 
 ```sh
 npx eas-cli@latest login
 npx eas-cli@latest init
-npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://<tu-proyecto>.supabase.co --visibility plaintext
+npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://tu-proyecto.supabase.co --visibility plaintext
 npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value <clave-publicable> --visibility plaintext
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-- `init` crea el proyecto en EAS y añade su `projectId` y `owner` a `app.json`.
-- **El `.env` local no se sube** a las compilaciones en la nube porque Git lo ignora. Por eso
-  las dos variables públicas se crean como **variables de entorno de EAS** en el entorno
-  `preview` (y en `production` si compilas ese perfil). Si faltan, la app no puede conectar con
-  Supabase (falla al iniciar sesión o al cargar). No crees allí ninguna clave secreta.
-- Al terminar, EAS muestra un enlace y un código QR. Ábrelo en el teléfono, descarga el APK e
-  instálalo; Android pedirá permitir «instalar apps desconocidas» para el navegador.
-- Las dependencias nativas (Skia, cámara, SQLite, Reanimated) son las versiones que fija Expo
-  SDK 57 y compilan en EAS sin pasos extra.
+- El `.env` local **no se sube** a EAS; por eso las dos variables públicas se crean como variables
+  de entorno de EAS. No crees allí ninguna clave secreta.
+- Al terminar, EAS entrega un enlace y un QR para descargar el APK.
+- **Alternativa:** compilar desde GitHub (conectando el repositorio al proyecto de EAS) y publicar
+  el APK resultante como _release_, como en el enlace de [Descargar la app](#descargar-la-app).
 
-## Prueba sin conexión en el APK
+---
 
-1. Instala el APK, inicia sesión **con red** y espera a que la biblioteca cargue y la
-   insignia de sincronización diga «Sincronizado».
-2. Activa el **modo avión**.
-3. Añade un libro con foto, edita otro, cambia la página actual y borra uno. Todo debe funcionar
-   y la insignia debe indicar «Sin conexión · N pendientes».
-4. Cierra la app por completo y ábrela de nuevo: los cambios siguen ahí y la sesión se mantiene.
-5. Comprueba que el escáner, «Sugerir datos» y el librero avisan de que no hay conexión, y que la
-   última recomendación sigue visible.
-6. Desactiva el modo avión: la cola se envía sola y la insignia vuelve a «Sincronizado».
-7. Comprueba en Supabase (**Table Editor** y **Storage**) que llegaron los cambios y la portada.
+## Pruebas y calidad
 
-La lista completa de pruebas manuales está en `docs/qa-checklist.md`.
+```sh
+npm run verify
+```
+
+Ejecuta, en orden: `typecheck` (TypeScript), `lint` (ESLint sin avisos), `format:check`
+(Prettier), `test` (Jest) y `check:secrets` (busca claves secretas sin leer `.env`).
+
+- Pruebas automáticas en `src/__tests__/` (lógica, repositorios, sincronización, pantallas y
+  Edge Functions).
+- Lista de pruebas manuales en dispositivo: [`docs/qa-checklist.md`](docs/qa-checklist.md).
+- Pruebas de SQL en [`supabase/tests/`](supabase/tests): `rls_isolation.sql` (aislamiento por
+  usuario) y `constraints.sql` (límites de entrada). Terminan con `ROLLBACK`, no guardan nada.
+
+---
 
 ## Limitaciones conocidas
 
-- **Recuperar la contraseña** solo envía el correo de Supabase: la app todavía no puede completar
-  el cambio (ver `docs/supabase-setup.md`).
-- **Sincronización con «gana la última escritura»**: si el mismo libro se edita en dos
-  dispositivos sin conexión, prevalece la última edición sincronizada.
-- Si una **portada se cambia en otro dispositivo**, este dispositivo puede seguir mostrando la
-  copia local anterior.
-- **La IA puede equivocarse**: datos propuestos, recomendaciones y sugerencias siempre se revisan
-  antes de guardarse, y los libros sugeridos pueden no existir (se marcan como «no comprobados»).
+- **Recuperar la contraseña** solo envía el correo de Supabase; la app todavía no completa el
+  cambio.
+- **Sincronización «gana la última escritura»:** si editas el mismo libro en dos dispositivos sin
+  conexión, prevalece la última edición sincronizada.
+- Si una **portada se cambia en otro dispositivo**, este puede seguir mostrando la copia local
+  anterior.
+- **La IA puede equivocarse:** todo se revisa antes de guardar y los libros sugeridos pueden no
+  existir (se marcan como «no comprobados»).
+- Los **límites de uso** cuentan también los intentos fallidos.
 - `npm audit --omit=dev` reporta vulnerabilidades en **herramientas de compilación** de Expo y
-  Jest. Su arreglo exige versiones mayores incompatibles con SDK 57, así que no se aplicó
-  `--force`.
-- Algunos comportamientos solo se pueden comprobar **en un dispositivo real** y no tienen pruebas
-  automáticas: cámara, Skia, modo avión, permisos y lectores de pantalla. Para eso existe la
-  lista de QA.
-- El icono, el icono adaptable y la splash son **provisionales**: los genera
-  `scripts/generateAssets.mjs`.
+  Jest; arreglarlas exige versiones incompatibles con SDK 57, por eso no se aplicó `--force`.
+- Cámara, Skia, modo avión, permisos y lectores de pantalla **solo se prueban en un dispositivo
+  real**, sin pruebas automáticas.
+- El icono, el icono adaptable y la splash son **provisionales** (`scripts/generateAssets.mjs`).
 
-## Solución de problemas
+---
 
-- **Ruta de Windows con espacios o acentos** (por ejemplo `Diseño de interfaces`): usa comillas
-  en la terminal (`cd "C:\...\Diseño de interfaces\..."`). Si Metro o Gradle fallan por la
-  ruta, mueve el proyecto a una ruta corta sin espacios, como `C:\dev\bookshelf`.
-- **`npm install` falla en Skia** (`install-libs.js`): usa `npm install --ignore-scripts`; los
-  detalles están en Instalación.
-- **La app no conecta con Supabase (no inicia sesión ni carga datos)**: falta `.env`, o, en el APK, las variables
-  de entorno de EAS del perfil que compilaste.
-- **El escáner, las sugerencias o el librero siempre fallan**:
-  - Puede que la Edge Function no esté publicada (aparece como 404 en **Edge Functions →
-    Logs**), o que falten los secretos. Repite el paso 5 de «Configurar Supabase».
-  - Si es `discover-book`, puede faltar la migración de la fase 7.5.
-- **«Demasiados intentos seguidos»**: es el límite por usuario. Por hora y por día:
-  - escáner: 20 y 100;
-  - sugerencias: 30 y 150;
-  - librero: 20 y 60;
-  - «Nuevas aventuras»: 15 y 50.
+## Autoría y contexto del curso
 
-  Espera o prueba con otra cuenta.
+Proyecto final de la asignatura **Diseño de Interfaces** (5.º semestre).
 
-- **«rate limit exceeded» al registrarse**: es el límite de correos de Supabase. Desactiva
-  «Confirm email» o configura un SMTP propio.
-
-## Límites de los campos
-
-Un solo archivo (`src/lib/inputLimits.ts`) define cada límite; lo usan la interfaz, los
-validadores, las funciones Edge (`supabase/functions/_shared/inputLimits.ts`) y las restricciones
-de SQL, y una prueba comprueba que coinciden. Los campos de texto quitan los caracteres de control
-al escribir o pegar y, al guardar, juntan los espacios repetidos; los números aceptan solo
-dígitos; el correo se pasa a minúsculas; las contraseñas nunca se modifican.
-
-| Campo                     | Límite                       |
-| ------------------------- | ---------------------------- |
-| Título                    | 200                          |
-| Autor                     | 120                          |
-| Género                    | 60                           |
-| Notas                     | 2000 (contador desde 1800)   |
-| Persona a quien se presta | 80                           |
-| Nombre para mostrar       | 50                           |
-| Correo                    | 254, sin espacios            |
-| Contraseña                | de 8 a 72                    |
-| Búsqueda                  | 100                          |
-| Contexto del Librero      | 200                          |
-| Páginas / página actual   | 5 dígitos; 1-10000 / 0-total |
-
-Los libros guardados antes de estos límites se muestran recortados y se suben al servidor ya
-recortados.
+<!--
+  Añade aquí los nombres del equipo, la institución, el docente y la fecha de entrega.
+  El README anterior no incluía esa información y no se inventó.
+-->
